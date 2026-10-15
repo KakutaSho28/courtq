@@ -1,0 +1,8 @@
+backend/vendor/** linguist-vendored
+frontend/node_modules/** linguist-vendored
+
+*.php linguist-detectable=false
+*.blade.php linguist-detectable=false
+
+*.ts linguist-detectable=true
+*.tsx linguist-detectable=true
