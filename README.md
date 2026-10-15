@@ -37,6 +37,19 @@ cd frontend && npm ci && npm run build && npm run e2e   # 初回は npx playwrig
 bash scripts/smoke-test.sh http://localhost/api          # 起動中の API の疎通確認
 ```
 
+## デモデータとデモアカウント
+
+`docker compose run --rm php php artisan db:seed` で、架空の会場・試合（今日の試合を含む 2 試合）・8 ブース・メニュー・在庫・混雑を投入します（何度実行しても重複しません。今日の試合の混雑は実行時刻を基準に作り直します）。
+
+| メール | 役割 | 担当ブース |
+|---|---|---|
+| `admin@example.com` | 管理者 | 全ブース |
+| `staff1@example.com` | スタッフ | ファーストブレイク・バーガー、ベースライン・ラーメン |
+| `staff2@example.com` | スタッフ | ウィングス・グッズ東 |
+| `user1@example.com` / `user2@example.com` | 一般ユーザー | – |
+
+パスワードはすべて `courtq-demo-1234`（環境変数 `DEMO_PASSWORD` で変更可）です。**公開デモ用の誰でも知る値なので、実運用のデータがある環境ではシードしないでください。** 管理者は画面・API からは作れません。実運用では `php artisan app:create-admin <email>` で作成します（既存ユーザーならそのユーザーを管理者にし、新規ならパスワードを 1 回だけ表示します）。
+
 ## ドキュメント
 
 [`docs/`](docs/README.md) を参照してください。API 仕様は [`docs/api-endpoints.md`](docs/api-endpoints.md)（`php artisan docs:api` で自動生成）です。開発のルールは [`CLAUDE.md`](CLAUDE.md) にあります。
