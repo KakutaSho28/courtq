@@ -12,7 +12,7 @@
 | 層 | 技術 |
 |---|---|
 | Frontend | React 18 / TypeScript (strict) / Vite / Zustand / Axios / Laravel Echo + pusher-js / PWA |
-| Backend | Laravel 10 / PHP 8.2 / Sanctum（Bearer トークン） / Queue・Cache（database） |
+| Backend | Laravel 12 / PHP 8.2 / Sanctum（Bearer トークン） / Queue・Cache（database） |
 | DB | MySQL 8.0 |
 | Realtime | Pusher Channels（キー未設定ならリアルタイム機能は無効で、通常どおり動作） |
 | 開発環境 | Docker Compose |
