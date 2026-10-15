@@ -8,7 +8,7 @@ CourtQ（コートキュー = Court + Queue）は、バスケットボールの�
 | Layer | Tech |
 |---|---|
 | Frontend | React 18 / TypeScript (strict) / Vite 5 / Zustand / Axios / Laravel Echo + pusher-js / vite-plugin-pwa |
-| Backend | Laravel 10 / PHP 8.2 / Sanctum (Bearer token) / Queue (`database` driver) / Cache (`database` driver) |
+| Backend | Laravel 12 / PHP 8.2 / Sanctum (Bearer token) / Queue (`database` driver) / Cache (`database` driver) |
 | DB | MySQL 8.0（テストは sqlite in-memory） |
 | Local infra | Docker Compose（nginx / php-fpm / queue worker / mysql / node） |
 
