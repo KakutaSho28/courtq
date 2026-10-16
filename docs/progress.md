@@ -10,7 +10,7 @@
 | WP-B0 計画 | ✅ 完了（2026-10-16 にユーザーが承認） | [#4](https://github.com/KakutaSho28/courtq/pull/4)（`develop` 向け） |
 | WP-B1 基盤 | ✅ 完了（別の作業で実装済み。2026-10-16 に検証して完了扱いにした） | [#1](https://github.com/KakutaSho28/courtq/pull/1)・[#2（Laravel 12）](https://github.com/KakutaSho28/courtq/pull/2)、`develop` にマージ済み |
 | WP-B2 データモデル | ✅ 完了（`develop` にマージ済み） | [#3](https://github.com/KakutaSho28/courtq/pull/3) |
-| WP-B3 読み取り API | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | `feature/wp-b3-read-api` → `develop`（下の PR リンク参照） |
+| WP-B3 読み取り API | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | [#5](https://github.com/KakutaSho28/courtq/pull/5)（`feature/wp-b3-read-api` → `develop`） |
 | WP-B4〜B10 | ⬜ 未着手 | — |
 
 ## 完了
