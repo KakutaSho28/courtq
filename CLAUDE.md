@@ -111,10 +111,10 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 
 ## Deploy
 
-- `main` への push で Railway（API: `backend/Dockerfile`、web + worker + MySQL）と Vercel（SPA: `frontend/`）が自動デプロイされる。手順・環境変数一覧は `docs/deployment.md`（WP-B10 で作成）。
-- 本番コンテナは起動時に `migrate --force` → `config:cache` → `route:cache`。**ルートにクロージャを使わない**（route:cache が失敗する。`DeploymentConfigTest` が検知）。
+- `main` への push で Railway（API: `backend/Dockerfile`、web + worker + MySQL）と Vercel（SPA: `frontend/`）が自動デプロイされる。手順・環境変数一覧・症状別の対処は `docs/deployment.md`。
+- 本番コンテナ（web・worker）は起動の最初に `php artisan app:deploy-check`（`DeployCheckService`。環境変数の取り違えを日本語で検出して止める。秘密は表示しない）、続いて web は `migrate --force` → `config:cache` → `route:cache`。**ルートにクロージャを使わない**（route:cache が失敗する。`DeploymentConfigTest` が検知）。
 - CORS は `CORS_ALLOWED_ORIGINS`（ワイルドカード不可。Vercel の URL を末尾スラッシュなしで指定）。
-- 稼働確認は `GET /api/health`（DB 接続を確認する）と `bash scripts/smoke-test.sh <api-url> [frontend-url]`。
+- 稼働確認は `GET /api/health`（DB 接続を確認する）と `bash scripts/smoke-test.sh <api-url> [frontend-url]`（CORS・SPA の rewrite・フロントが向いている API の URL・PWA を確認）。Vercel のビルドは `frontend/scripts/check-deploy-env.mjs` が `VITE_*` を確認する。`.github/workflows/docker.yml` が本番イメージ + MySQL 8 で起動確認する。
 - ダッシュボード操作（Railway / Vercel / Pusher）は人間が行う。必ず「Manual steps」として手順を出す。
 
 ## Realtime（Pusher Channels）

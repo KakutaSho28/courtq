@@ -14,8 +14,11 @@
 | WP-B4 ロール・認可・スタッフ API | ✅ 完了（`develop` にマージ済み） | [#6](https://github.com/KakutaSho28/courtq/pull/6) |
 | WP-B5 利用者の画面 S01〜S06 | ✅ 完了（`develop` にマージ済み） | [#7](https://github.com/KakutaSho28/courtq/pull/7) |
 | WP-B6 スタッフの画面 S07〜S10 | ✅ 完了（`develop` にマージ済み） | [#8](https://github.com/KakutaSho28/courtq/pull/8) |
-| WP-B8 リアルタイム | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | [#9](https://github.com/KakutaSho28/courtq/pull/9)（`feature/wp-b8-realtime` → `develop`） |
-| WP-B7・B9・B10 | ⬜ 未着手 | — |
+| WP-B8 リアルタイム | ✅ 完了（`develop` にマージ済み） | [#9](https://github.com/KakutaSho28/courtq/pull/9) |
+| WP-B9a デプロイ準備 | 🔄 実装・検証済み、PR 作成予定（マージ待ち） | `feature/wp-b9a-deploy-prep` → `develop` |
+| WP-B9b PWA・オフライン・Lighthouse | ⬜ 未着手（B9a の次） | — |
+| WP-B7 管理画面 | ⬜ 未着手（B9b の次） | — |
+| WP-B10 ドキュメント仕上げ | ⬜ 未着手 | — |
 
 ## 完了
 
@@ -27,10 +30,34 @@
 
 ## 次にやること
 
-1. WP-B8 の PR をユーザーがマージする。
-2. 優先順位（作業指示 8 章）に従い、次は **WP-B9（PWA のキャッシュ・最終更新・オフライン表示・Lighthouse）**。ブース一覧・詳細をオフラインで開いたときのキャッシュ表示（B5 で未確認）、PWA でのリアルタイムの扱いを確認する。
-3. その後 WP-B7（管理画面 S11〜S14 + CSV 取り込み。ADMIN-01〜04。`section` が NULL の試合の重複確認、`is_open` の切り替えもここ）→ WP-B10（ドキュメント・ER 図・権限表・`docs/deployment.md`・自己評価）。
-4. Pusher の実環境の確認（ダッシュボード操作が必要。Manual steps として手順を出す）は WP-B10 の `docs/deployment.md` に書く。
+順番は 2026-10-16 にユーザーが変更した: **B9a（デプロイ準備）→ B9b（PWA）→ B7（管理画面）→ B10**。
+
+1. WP-B9a の PR をユーザーがマージする。
+2. ユーザーが `docs/deployment.md` 4 章のダッシュボード手順（Pusher → Railway → Vercel → worker）を行い、`scripts/smoke-test.sh` を実行して結果を共有する（実環境の確認は、ここで初めて「確認済み」にできる）。
+3. WP-B9b: ブース一覧・詳細をオフラインで開いたときのキャッシュ表示（B5 で未確認）、PWA でのリアルタイムの扱い、Lighthouse。
+4. WP-B7（管理画面 S11〜S14 + CSV 取り込み。ADMIN-01〜04。`section` が NULL の試合の重複確認、`is_open` の切り替えもここ）→ WP-B10（ER 図・権限表・自己評価）。
+
+### WP-B9a 決定事項と検証（2026-10-16）
+
+- **環境変数の取り違えは、起動前に検出して止める**（`DeployCheckService` / `php artisan app:deploy-check`）。Spovie で時間を失ったのは「起動してから原因が分かる」ことだったため。web は DB の準備を最大 60 秒待つ（DB が後から起動する場合の再起動ループを避ける）。worker は HTTP を受けないので `APP_URL` / CORS は見ない。秘密の値は出力しない。
+- Vercel のビルドでも `VITE_*` を確認する（`VERCEL=1` のときだけ。ローカルの `npm run build` は止めない）。
+- スモークテストは「API が動いているか」だけでなく、**ビルドされたフロントが、その API の URL を向いているか**（再デプロイ忘れ）、CORS、SPA の直接アクセス、PWA を見る。
+- `Handler` の API エラー JSON も日本語をエスケープしない（未定義ルートの 404 で見つかった不具合の修正）。
+- CORS のプリフライトを 1 時間キャッシュ（`max_age`）。
+- Dockerfile から使っていない PHP 拡張（gd / exif / zip）を外してビルドを軽くした。
+- `.github/workflows/docker.yml`: 本番イメージ + MySQL 8 で web・worker を起動してスモークテストを流す。
+- 管理者の作成は `php artisan app:create-admin`（画面・API からは作れない方針のまま）。
+
+| 確認 | 結果 |
+|---|---|
+| `php artisan test`（sqlite / MySQL 8.0） | ✅ 278 件成功 |
+| 本番相当の起動（PHP 8.2 + MySQL 8.0.46 のコンテナ）、worker のジョブが Pusher HTTP API（偽サーバー）へ届く | ✅ |
+| nginx + php-fpm + supervisord + 本物の `start-web.sh` でスモークテスト | ✅（ホストは Ubuntu + PHP 8.3） |
+| スモークテストが 5 種類の設定ミスを検出 | ✅ |
+| `npm run test:deploy`（11 件）、`npm run build`、E2E | 最終報告に記載 |
+| 本番 Dockerfile の通しビルド（`apt-get` に接続できない環境だった） | **not verified**（CI の `docker.yml` で確認） |
+| `docker.yml` の GitHub Actions 上の実行 | **not verified** |
+| Railway / Vercel / Pusher の実環境（Root Directory・ターゲットポート・参照変数・`railway.worker.json` のパス指定・`railway ssh`・Pusher の上限） | **not verified**（ダッシュボード操作はユーザー） |
 
 ### WP-B1 の検証（`develop` @ `7982918`、2026-10-16）
 
