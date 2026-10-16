@@ -14,7 +14,7 @@ class StaffInvitationFactory extends Factory
     {
         return [
             'booth_id' => Booth::factory(),
-            'code' => Str::upper(Str::random(10)),
+            'code' => Str::upper(Str::random(8)),
             'expires_at' => now()->addDays(7),
             'used_at' => null,
             'used_by' => null,
