@@ -76,6 +76,7 @@ class ApiDocsGenerator
                 'uri' => $uri,
                 'action' => $route['action'],
                 'auth' => $this->requiresAuth($route),
+                'permission' => $this->permissionFor($route),
                 'rules' => $this->rulesFor((string) $route['action']),
                 'order' => array_search($key, array_keys($examples), true),
             ];
@@ -97,6 +98,42 @@ class ApiDocsGenerator
         }
 
         return false;
+    }
+
+    /**
+     * ルートのミドルウェア（role / can / throttle）から「誰が使えるか」を作る。人が書く説明とずれないよう、コードから取る。
+     *
+     * @param  array<string, mixed>  $route
+     */
+    private function permissionFor(array $route): string
+    {
+        if (! $this->requiresAuth($route)) {
+            return '誰でも';
+        }
+
+        $roles = null;
+        $policy = null;
+        $throttle = null;
+        foreach ($route['middleware'] ?? [] as $middleware) {
+            $middleware = (string) $middleware;
+            if (preg_match('/EnsureRole:(.+)$/', $middleware, $m)) {
+                $roles = str_replace(',', ', ', $m[1]);
+            } elseif (preg_match('/Authorize:manage,/', $middleware)) {
+                $policy = '担当ブースのみ（admin は全ブース）';
+            } elseif (preg_match('/ThrottleRequests:(staff-write|invitation-accept|login|register)$/', $middleware, $m)) {
+                $throttle = ['staff-write' => '30 回/分/ユーザー', 'invitation-accept' => '10 回/分/ユーザー', 'login' => '10 回/分', 'register' => '20 回/分'][$m[1]];
+            }
+        }
+
+        $text = $roles ?? 'ログインユーザー全員';
+        if ($policy !== null) {
+            $text .= '・'.$policy;
+        }
+        if ($throttle !== null) {
+            $text .= '（'.$throttle.'）';
+        }
+
+        return $text;
     }
 
     /**
@@ -172,7 +209,7 @@ class ApiDocsGenerator
 
 ### 権限の考え方
 
-役割（`role`）は `user`（既定）/ `staff` / `admin`。**サーバーが決めるもので、クライアントからは受け取らない**。混雑・在庫の更新は、認証 → ロール（`role:staff,admin`）→ ブースの担当判定（Policy）→ 入力検証 → レート制限の順にサーバー側で検査する（CORS は直接の API 呼び出しを防がないため、守りはサーバーの認可）。役割に応じた API は WP-B4 で追加し、この表を更新する。
+役割（`role`）は `user`（既定）/ `staff` / `admin`。**サーバーが決めるもので、クライアントからは受け取らない**。混雑・在庫の更新は、認証（401）→ 役割（`role:staff,admin`、403）→ レート制限（429）→ ID の解決（404）→ ブースの担当判定（Policy、403）→ 入力検証（422）の順にサーバー側で検査する。役割の確認は ID の解決より前なので、一般ユーザーは存在しない ID を送っても 403 になる（CORS は直接の API 呼び出しを防がないため、守りはサーバーの認可）。各エンドポイントの「権限」は、ルートのミドルウェア（`role:` / `can:manage` / `throttle:`）から自動で書き出している。一般ユーザーが自分のトークンで書き込み API を直接呼んでも 403 になることを、全書き込み API についてテスト（`AuthorizationTest`）で確認している。
 
 | 操作 | user | staff | admin |
 |---|---|---|---|
@@ -193,10 +230,10 @@ MD;
                 $group = $e['group'];
                 $out[] = "### {$group}";
                 $out[] = '';
-                $out[] = '| メソッド | パス | 認証 | 概要 |';
+                $out[] = '| メソッド | パス | 権限 | 概要 |';
                 $out[] = '|---|---|---|---|';
             }
-            $out[] = sprintf('| %s | `%s` | %s | %s |', $this->cell($e['method']), $e['uri'], $e['auth'] ? '必要' : '不要', $this->cell($e['summary']));
+            $out[] = sprintf('| %s | `%s` | %s | %s |', $this->cell($e['method']), $e['uri'], $this->cell($e['permission']), $this->cell($e['summary']));
             if (($endpoints[$i + 1]['group'] ?? null) !== $group) {
                 $out[] = '';
             }
@@ -211,6 +248,7 @@ MD;
         $out = ["---", '', "## {$e['method']} `{$e['uri']}`", '', "**{$e['summary']}**", ''];
         $out[] = sprintf('- 実装: `%s`', $e['action']);
         $out[] = '- 認証: ' . ($e['auth'] ? '必要（Bearer トークン）' : '不要');
+        $out[] = '- 権限: ' . $e['permission'];
         $out[] = '';
 
         if (! empty($e['description'])) {

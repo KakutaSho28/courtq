@@ -28,7 +28,7 @@ class AuthFlowTest extends TestCase
         $this->withToken($token)
             ->getJson('/api/me')
             ->assertOk()
-            ->assertExactJson(['data' => ['id' => 1, 'name' => 'テストユーザー', 'email' => 'test@example.com']]);
+            ->assertExactJson(['data' => ['id' => 1, 'name' => 'テストユーザー', 'email' => 'test@example.com', 'role' => 'user', 'booths' => []]]);
 
         $this->withToken($token)->postJson('/api/auth/logout')->assertOk();
         $this->assertSame(0, User::first()->tokens()->count());

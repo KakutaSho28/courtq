@@ -6,7 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * ログインユーザーの公開項目。role と担当ブースは WP-B4 で追加する。
+ * ログインユーザー（/me、ログイン・登録の応答）。
+ * booths は booth_staff に登録された担当ブース。admin は全ブースを管理できるが、ここには担当登録したブースだけが入る。
  *
  * @mixin \App\Models\User
  */
@@ -18,6 +19,10 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'role' => $this->role->value,
+            'booths' => $this->booths()->orderBy('booths.name')->get(['booths.id', 'booths.name'])
+                ->map(fn ($booth) => ['booth_id' => $booth->id, 'name' => $booth->name])
+                ->all(),
         ];
     }
 }
