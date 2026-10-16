@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { fetchBooths, fetchGame, type BoothFilters, type BoothSort } from '../api/courtq';
 import { BoothCard } from '../components/BoothCard';
@@ -6,9 +6,12 @@ import { LoadError, Loading, RefreshError } from '../components/LoadState';
 import { Segmented } from '../components/Segmented';
 import { DEFAULT_STALE_AFTER_MINUTES } from '../constants';
 import { useApiResource } from '../hooks/useApiResource';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useFavoriteToggle } from '../hooks/useFavoriteToggle';
+import { useGameRealtime } from '../hooks/useGameRealtime';
 import { useNow } from '../hooks/useNow';
+import { isNewer, sortBooths } from '../lib/boothSort';
 import { formatTipoff } from '../lib/time';
 
 type Category = 'all' | 'food' | 'merch';
@@ -51,6 +54,34 @@ export function BoothListPage() {
   useDocumentTitle(game.data ? `${game.data.home_team} vs ${game.data.away_team} のブース` : 'ブース一覧');
 
   const reloadBooths = booths.reload;
+
+  // リアルタイム: 混雑の更新はその場で差し替えて並べ替える。在庫の更新は「在庫のあるメニューなし」の判定が変わりうるので、
+  // 短い間にまとめて 1 回だけ取り直す。再接続したときと、つながっていない間は定期的に取り直す
+  const [flashed, setFlashed] = useState<ReadonlySet<number>>(new Set());
+  const [announcement, setAnnouncement] = useState('');
+  const reloadSoon = useDebouncedCallback(reloadBooths, 1000);
+  useGameRealtime(gameId, {
+    onCongestion: (event) => {
+      const target = booths.data?.data.find((b) => b.booth_id === event.booth_id);
+      if (!target || !isNewer(event.updated_at, target.congestion.updated_at)) return;
+      booths.update((prev) => ({
+        ...prev,
+        data: sortBooths(
+          prev.data.map((b) =>
+            b.booth_id === event.booth_id
+              ? { ...b, congestion: { level: event.level, label: event.label, wait_minutes: event.wait_minutes, updated_at: event.updated_at, is_stale: false } }
+              : b,
+          ),
+          filters.sort,
+        ),
+      }));
+      setAnnouncement(`${target.name}の混雑が「${event.label}」に更新されました`);
+      setFlashed((ids) => new Set(ids).add(event.booth_id));
+      window.setTimeout(() => setFlashed((ids) => new Set([...ids].filter((id) => id !== event.booth_id))), 2500);
+    },
+    onStock: reloadSoon,
+    onResync: reloadBooths,
+  });
   const onFavoriteChanged = useCallback(() => {
     // 「お気に入りのみ」の表示中に外したら、一覧から消えるよう取り直す
     if (filters.favorites) reloadBooths();
@@ -106,6 +137,9 @@ export function BoothListPage() {
         </button>
       </div>
 
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
       {favorite.error && (
         <div className="notice notice-error" role="alert">
           {favorite.error}
@@ -132,6 +166,7 @@ export function BoothListPage() {
                 gameId={gameId}
                 booth={booth}
                 isFavorite={fav}
+                flash={flashed.has(booth.booth_id)}
                 favoriteBusy={favorite.busy[booth.booth_id] ?? false}
                 onToggleFavorite={() => void favorite.toggle(booth.booth_id, fav)}
                 staleAfterMinutes={staleAfter}

@@ -10,6 +10,8 @@ type Props = {
   booth: BoothListItem;
   isFavorite: boolean;
   favoriteBusy: boolean;
+  /** リアルタイムで更新されたばかり（短い間、枠を強調して気づけるようにする） */
+  flash?: boolean;
   onToggleFavorite: () => void;
   staleAfterMinutes: number;
   now: number;
@@ -19,11 +21,11 @@ type Props = {
  * ブース一覧の 1 件。カード全体（お気に入りボタン以外）が詳細へのリンクで、タップしやすい。
  * 混雑は色 + メーター + 文言、待ち時間、最終更新を並べる。
  */
-export function BoothCard({ gameId, booth, isFavorite, favoriteBusy, onToggleFavorite, staleAfterMinutes, now }: Props) {
+export function BoothCard({ gameId, booth, isFavorite, favoriteBusy, flash = false, onToggleFavorite, staleAfterMinutes, now }: Props) {
   const { congestion } = booth;
 
   return (
-    <li className={`booth-card${booth.is_open ? '' : ' is-closed'}`}>
+    <li className={`booth-card${booth.is_open ? '' : ' is-closed'}${flash ? ' is-updated' : ''}`}>
       <Link to={`/games/${gameId}/booths/${booth.booth_id}`} className="booth-card-link">
         <span className="booth-card-head">
           <span className="booth-name">{booth.name}</span>

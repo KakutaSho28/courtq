@@ -156,3 +156,25 @@ export type StockUpdateResult = { game_id: number; menu_item_id: number; stock: 
 
 /** 招待コードを使った結果（STAFF-05） */
 export type InvitationAccepted = { user: AuthUser; booth: { booth_id: number; name: string } };
+
+/** リアルタイム: 混雑の更新（チャンネル game.{gameId}、イベント booth.congestion.updated） */
+export type CongestionUpdatedEvent = {
+  game_id: number;
+  booth_id: number;
+  game_booth_id: number;
+  level: CongestionLevel;
+  label: string;
+  wait_minutes: number | null;
+  updated_at: string;
+};
+
+/** リアルタイム: 在庫の更新（イベント item.stock.updated） */
+export type StockUpdatedEvent = {
+  game_id: number;
+  booth_id: number;
+  menu_item_id: number;
+  status: StockStatus;
+  label: string;
+  quantity: number | null;
+  updated_at: string;
+};

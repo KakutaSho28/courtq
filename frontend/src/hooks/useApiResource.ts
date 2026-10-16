@@ -10,6 +10,8 @@ export type Resource<T> = {
   refreshing: boolean;
   error: ApiErrorInfo | null;
   reload: () => void;
+  /** 取得済みのデータを書き換える（リアルタイムの更新を反映するため）。まだデータが無いときは何もしない */
+  update: (updater: (previous: T) => T) => void;
 };
 
 /**
@@ -65,5 +67,9 @@ export function useApiResource<T>(load: () => Promise<T>, key: string): Resource
     };
   }, [run]);
 
-  return { data, loading: pending && data === null, refreshing: pending && data !== null, error, reload: run };
+  const update = useCallback((updater: (previous: T) => T) => {
+    setData((previous) => (previous === null ? previous : updater(previous)));
+  }, []);
+
+  return { data, loading: pending && data === null, refreshing: pending && data !== null, error, reload: run, update };
 }

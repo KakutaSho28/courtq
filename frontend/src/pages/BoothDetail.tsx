@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchBoothDetail, fetchCongestionHistory } from '../api/courtq';
 import { CongestionBadge } from '../components/CongestionBadge';
@@ -10,7 +11,9 @@ import { CATEGORY_LABELS, DEFAULT_STALE_AFTER_MINUTES } from '../constants';
 import { useApiResource } from '../hooks/useApiResource';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useFavoriteToggle } from '../hooks/useFavoriteToggle';
+import { useGameRealtime } from '../hooks/useGameRealtime';
 import { useNow } from '../hooks/useNow';
+import { isNewer } from '../lib/boothSort';
 import { formatYen } from '../lib/time';
 import type { MenuItem } from '../types';
 
@@ -51,6 +54,43 @@ export function BoothDetailPage() {
   const favorite = useFavoriteToggle();
   useDocumentTitle(detail.data?.data.name ?? 'ブース');
 
+  // リアルタイム: この試合のこのブースの更新だけを反映する（他のブースのイベントは無視）。
+  // 再接続したときと、つながっていない間は定期的に取り直す
+  const [flash, setFlash] = useState(false);
+  const boothNumber = Number(boothId);
+  useGameRealtime(gameId, {
+    onCongestion: (event) => {
+      if (event.booth_id !== boothNumber) return;
+      const point = { level: event.level, label: event.label, wait_minutes: event.wait_minutes, recorded_at: event.updated_at };
+      detail.update((prev) =>
+        isNewer(event.updated_at, prev.data.congestion.updated_at)
+          ? { ...prev, data: { ...prev.data, congestion: { level: event.level, label: event.label, wait_minutes: event.wait_minutes, updated_at: event.updated_at, is_stale: false } } }
+          : prev,
+      );
+      history.update((points) => (points.length > 0 && !isNewer(event.updated_at, points[points.length - 1].recorded_at) ? points : [...points, point]));
+      setFlash(true);
+      window.setTimeout(() => setFlash(false), 2500);
+    },
+    onStock: (event) => {
+      if (event.booth_id !== boothNumber) return;
+      detail.update((prev) => ({
+        ...prev,
+        data: {
+          ...prev.data,
+          menu_items: prev.data.menu_items.map((item) =>
+            item.id === event.menu_item_id && isNewer(event.updated_at, item.stock?.updated_at ?? null)
+              ? { ...item, stock: { status: event.status, label: event.label, quantity: event.quantity, updated_at: event.updated_at, is_stale: false } }
+              : item,
+          ),
+        },
+      }));
+    },
+    onResync: () => {
+      detail.reload();
+      history.reload();
+    },
+  });
+
   const back = (
     <p className="breadcrumb">
       <Link to={`/games/${gameId}`} className="link">
@@ -79,7 +119,7 @@ export function BoothDetailPage() {
       </p>
       {booth.description && <p>{booth.description}</p>}
 
-      <section className="status-panel" aria-label="いまの混雑">
+      <section className={`status-panel${flash ? ' is-updated' : ''}`} aria-label="いまの混雑">
         <CongestionBadge level={booth.congestion.level} isOpen={booth.is_open} size="lg" />
         {booth.is_open && (
           <p className="status-wait">
