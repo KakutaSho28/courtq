@@ -18,6 +18,7 @@ async function mockAuthApi(page: Page, options: { loginStatus?: number } = {}) {
         : route.fulfill({ json: { data: { user: ALICE, token: 'alice-token' } } });
     }
     if (path === '/me') return route.fulfill({ json: { data: ALICE } });
+    if (path === '/games') return route.fulfill({ json: { data: [] } });
     if (path === '/auth/logout') return route.fulfill({ json: { message: 'ログアウトしました' } });
     return route.fulfill({ status: 404, json: { message: '見つかりません' } });
   });
@@ -31,7 +32,7 @@ test('未ログインでホームを開くと、ログイン画面に移動す�
   await expect(page.getByRole('button', { name: 'ログイン' })).toBeVisible();
 });
 
-test('新規登録するとホームが開き、ログアウトするとログイン画面に戻る', async ({ page }) => {
+test('新規登録すると試合一覧が開き、ログアウトするとログイン画面に戻る', async ({ page }) => {
   const calls = await mockAuthApi(page);
   await page.goto('/register');
 
@@ -42,9 +43,10 @@ test('新規登録するとホームが開き、ログアウトするとログ�
   await page.getByRole('button', { name: '登録する' }).click();
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
-  await expect(page.getByText('アリスさん、ようこそ。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
+  await expect(page.getByText('予定されている試合はありません。')).toBeVisible();
   await expect.poll(() => calls).toContain('GET /me');
+  await expect.poll(() => calls).toContain('GET /games');
 
   await page.getByRole('button', { name: 'ログアウト' }).click();
   await expect(page).toHaveURL(/\/login$/);
