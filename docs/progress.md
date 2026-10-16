@@ -14,7 +14,7 @@
 | WP-B4 ロール・認可・スタッフ API | ✅ 完了（`develop` にマージ済み） | [#6](https://github.com/KakutaSho28/courtq/pull/6) |
 | WP-B5 利用者の画面 S01〜S06 | ✅ 完了（`develop` にマージ済み） | [#7](https://github.com/KakutaSho28/courtq/pull/7) |
 | WP-B6 スタッフの画面 S07〜S10 | ✅ 完了（`develop` にマージ済み） | [#8](https://github.com/KakutaSho28/courtq/pull/8) |
-| WP-B8 リアルタイム | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | `feature/wp-b8-realtime` → `develop` |
+| WP-B8 リアルタイム | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | [#9](https://github.com/KakutaSho28/courtq/pull/9)（`feature/wp-b8-realtime` → `develop`） |
 | WP-B7・B9・B10 | ⬜ 未着手 | — |
 
 ## 完了
