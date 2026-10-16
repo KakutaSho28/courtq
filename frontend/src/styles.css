@@ -1,0 +1,146 @@
+/* ============================================
+   CourtQ — デザイントークン
+   - ブランド: ネイビー #14213D / オレンジ #FF7A1A（ロゴと同じ。アクセントはこの1色だけ）
+   - 混雑の状態色（緑 / 黄 / 橙 / 赤）はブランドのオレンジと別系統。
+     必ず文言（空いている / やや混雑 / 混雑 / 非常に混雑）と一緒に表示し、色だけで伝えない
+   ============================================ */
+:root {
+  --navy: #14213d;
+  --navy-soft: #1f2f52;
+  --accent: #ff7a1a;
+  --accent-press: #e8690d;
+  --on-accent: #14213d;
+
+  --bg: #f4f6fa;
+  --bg-card: #ffffff;
+  --line: #d9dee8;
+  --text: #14213d;
+  --text-dim: #566074;
+  --danger: #b3261e;
+
+  /* 混雑の状態色（--status-N-bg の上には --status-N-fg の文字色を使う） */
+  --status-1-bg: #15803d; --status-1-fg: #ffffff; /* 1 空いている */
+  --status-2-bg: #f5c400; --status-2-fg: #14213d; /* 2 やや混雑 */
+  --status-3-bg: #d9480f; --status-3-fg: #ffffff; /* 3 混雑（ブランドのオレンジより暗く赤みが強い） */
+  --status-4-bg: #b3261e; --status-4-fg: #ffffff; /* 4 非常に混雑 */
+
+  --radius: 12px;
+  --font: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  line-height: 1.6;
+}
+
+/* ----- レイアウト ----- */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px;
+  background: var(--navy);
+  color: #fff;
+}
+.brand { display: inline-flex; align-items: center; text-decoration: none; }
+.logo { display: block; width: auto; }
+.app-nav { display: flex; align-items: center; gap: 12px; }
+.app-header .btn-ghost { color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.app-header .btn-ghost:hover { border-color: #fff; }
+.app-header .realtime-badge { color: #cfd6e4; }
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+.page-title { font-size: 22px; font-weight: 700; margin: 0 0 20px; }
+
+/* ----- フォーム ----- */
+.auth-card {
+  max-width: 400px;
+  margin: 8vh auto 0;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+}
+.auth-logo { display: flex; justify-content: center; margin: 0; }
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 16px;
+  font-family: var(--font);
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ----- ボタン（タップしやすい大きさ） ----- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s;
+}
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { background: var(--accent-press); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--line); }
+.btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.btn-block { width: 100%; }
+.btn-sm { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+
+/* ----- その他 ----- */
+.error-msg { color: var(--danger); font-size: 14px; margin: 10px 0; }
+.empty { text-align: center; color: var(--text-dim); padding: 60px 0; }
+.link { color: var(--navy); font-weight: 700; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.muted { color: var(--text-dim); font-size: 13px; }
+
+/* ----- リアルタイム接続バッジ ----- */
+.realtime-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+.realtime-dot { width: 8px; height: 8px; border-radius: 50%; background: #8a8f8c; }
+.realtime-connected .realtime-dot { background: #34c759; }
+.realtime-connecting .realtime-dot { background: #ffd60a; }
+.realtime-disconnected .realtime-dot { background: #ff3b30; }
+
+/* ----- オフラインバナー ----- */
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  background: #ffd60a;
+}
+
+@media (max-width: 600px) {
+  .container { padding: 20px 16px 48px; }
+  .app-header { padding: 10px 16px; }
+  .auth-card { margin-top: 4vh; padding: 28px 20px; }
+}

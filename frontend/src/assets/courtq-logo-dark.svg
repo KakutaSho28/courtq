@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 100" width="720" height="200">
+  <rect width="360" height="100" fill="#14213D"/>
+  <g transform="translate(4 4) scale(0.92)">
+  <defs><clipPath id="ball"><circle cx="50" cy="50" r="38"/></clipPath></defs>
+  <path d="M70 70 L90 90" stroke="#FF7A1A" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="50" cy="50" r="38" fill="#FF7A1A"/>
+  <g clip-path="url(#ball)" fill="none" stroke="#14213D" stroke-width="3.6" stroke-linecap="round">
+    <line x1="50" y1="10" x2="50" y2="90"/>
+    <line x1="10" y1="50" x2="90" y2="50"/>
+    <path d="M27 17 C43 36 43 64 27 83"/>
+    <path d="M73 17 C57 36 57 64 73 83"/>
+  </g>
+  </g>
+  <text x="104" y="68" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="52" letter-spacing="-1" fill="#FFFFFF">Court<tspan fill="#FF7A1A">Q</tspan></text>
+</svg>
