@@ -1,9 +1,12 @@
 #!/bin/bash
 # =========================================================
-# 本番/ローカル API スモークテスト
-# health(DB) → 登録 → ログイン → /me → 試合・ブース・お気に入りの閲覧 → 一般ユーザーの書き込みは 403 → ログアウト → 失効したトークンは 401
+# デプロイ後の確認（本番 / ローカル）。
+#   API: health(DB) → 返ってくるのが JSON か → 未ログインは 401 → 登録 → ログイン → /me → 試合・ブース・お気に入りの閲覧
+#        → 一般ユーザーの書き込みは 403 → ログアウト → 失効したトークンは 401
+#   フロント（第2引数を渡したとき）: CORS（許可した Origin だけ / プリフライトのキャッシュ）→ SPA の直接アクセス（/login, /games/1）
+#        → PWA の manifest・Service Worker・アイコン → **ビルドされたフロントが、この API の URL を向いているか**
 # 使い方: bash scripts/smoke-test.sh https://<railway-domain>/api [https://<vercel-domain>]
-# 第2引数（任意）を渡すと、CORS プリフライトとフロントのSPAルーティングも確認する。
+# 注意: 実行のたびに、確認用の一般ユーザー（smoke-<時刻>@example.com）を 1 件登録する（削除する API は無い）。
 # 試合が 1 件も無い環境（デモデータ未投入）では、ブースの確認を飛ばす。
 # 書き込み API は「登録したばかりの一般ユーザーが自分のトークンで直接叩くと 403」だけを確認する（本番のデータを変えないため）。
 # =========================================================
@@ -25,8 +28,27 @@ check() { # name expected_status body_and_status
   echo "✓ $name ($status)"
 }
 body() { printf '%s' "${1%$'\n'*}"; }
+fail() { echo "✗ $1"; shift; for line in "$@"; do echo "  $line"; done; exit 1; }
+# ヘッダー値（大文字小文字を区別しない。最初の 1 つ）
+header_of() { printf '%s' "$1" | tr -d '\r' | grep -i "^$2:" | head -1 | sed -E "s/^[^:]+:[[:space:]]*//"; }
 json() { python3 -c "import sys,json; print(json.load(sys.stdin)$1)"; }
 
+case "$API" in
+  */api) ;;
+  *) fail "API の URL の末尾が /api ではありません: $API" "Railway の URL + /api を指定してください（例: https://xxxx.up.railway.app/api）" ;;
+esac
+case "$API" in
+  https://*) ;;
+  http://localhost*|http://127.0.0.1*) echo "- local API ($API): https のチェックは飛ばします" ;;
+  *) fail "API の URL が https:// ではありません: $API" ;;
+esac
+
+# health が JSON で返る（HTML なら、Root Directory の設定ミスや別のサービスにつながっている）
+hdr=$(curl -sS --max-time 30 -D - -o /dev/null "$API/health" -H 'Accept: application/json' | tr -d '\r')
+case "$(header_of "$hdr" content-type)" in
+  application/json*) ;;
+  *) fail "health が JSON を返していません（Content-Type: $(header_of "$hdr" content-type)）" "Railway の web サービスの Root Directory が /backend か、PORT と公開ドメインのポートが一致しているかを確認してください" ;;
+esac
 out=$(req "$API/health" -H 'Accept: application/json');                     check "health (database ok)" 200 "$out"
 [ "$(body "$out" | json "['data']['database']")" = "ok" ] && echo "✓ health reports database ok"
 
@@ -75,13 +97,71 @@ fi
 out=$(req -X POST "$API/auth/logout" "${AUTH[@]}");                         check "logout" 200 "$out"
 out=$(req "$API/me" "${AUTH[@]}");                                          check "token is revoked after logout" 401 "$out"
 
+out=$(req "$API/nothing-here" -H 'Accept: application/json');                check "unknown route returns a JSON 404" 404 "$out"
+[ "$(body "$out" | json "['message']")" = "見つかりません" ] && echo "✓ the 404 body is the Laravel JSON error"
+
 if [ -n "$FRONT" ]; then
   FRONT="${FRONT%/}"
-  hdr=$(curl -sS -o /dev/null -D - -X OPTIONS "$API/me" -H "Origin: $FRONT" \
+  ORIGIN_OF_API="${API%/api}"
+
+  # ----- CORS（ブラウザから API を呼べるか）-----
+  # プリフライト。Origin は末尾スラッシュなし（ブラウザが送る形）。許可されていなければ CORS エラーになる
+  hdr=$(curl -sS --max-time 30 -o /dev/null -D - -X OPTIONS "$API/me" -H "Origin: $FRONT" \
     -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization,content-type' | tr -d '\r')
-  echo "$hdr" | grep -qi "^access-control-allow-origin: $FRONT" && echo "✓ CORS allows $FRONT" || { echo "✗ CORS does not allow $FRONT"; echo "$hdr"; exit 1; }
-  code=$(curl -sS -o /dev/null -w '%{http_code}' "$FRONT/login")
-  [ "$code" = "200" ] && echo "✓ frontend serves /login (SPA rewrite)" || { echo "✗ frontend /login returned $code"; exit 1; }
+  [ "$(header_of "$hdr" access-control-allow-origin)" = "$FRONT" ] \
+    && echo "✓ CORS allows $FRONT" \
+    || fail "CORS が $FRONT を許可していません" "Railway の CORS_ALLOWED_ORIGINS を Vercel の URL（末尾スラッシュなし、https://〜）にして、web サービスを再デプロイしてください" "$hdr"
+  # プリフライトのキャッシュ（0 や無しだと、全リクエストの前に確認の通信が入り、弱い回線で遅くなる）
+  max_age=$(header_of "$hdr" access-control-max-age)
+  [ "${max_age:-0}" -ge 600 ] && echo "✓ CORS preflight is cacheable (max-age ${max_age}s)" || fail "プリフライトのキャッシュ（Access-Control-Max-Age）が短すぎます（${max_age:-なし}）"
+  # 実際のリクエストにも Origin が返る
+  hdr=$(curl -sS --max-time 30 -o /dev/null -D - "$API/health" -H "Origin: $FRONT" | tr -d '\r')
+  [ "$(header_of "$hdr" access-control-allow-origin)" = "$FRONT" ] && echo "✓ CORS header is present on real requests" || fail "実際のリクエストに Access-Control-Allow-Origin が返りません" "$hdr"
+  # 許可していない Origin には、その Origin を許可する応答を返さない（Laravel は、許可している Origin を固定で返す。
+  # ブラウザは、要求した Origin と一致しない応答を拒否するので安全。危険なのは、* や相手の Origin をそのまま返す設定）
+  hdr=$(curl -sS --max-time 30 -o /dev/null -D - -X OPTIONS "$API/me" -H 'Origin: https://evil.example' \
+    -H 'Access-Control-Request-Method: GET' | tr -d '\r')
+  allowed=$(header_of "$hdr" access-control-allow-origin)
+  if [ "$allowed" = "*" ] || [ "$allowed" = "https://evil.example" ]; then
+    fail "許可していない Origin（https://evil.example）まで CORS が許可しています" "CORS_ALLOWED_ORIGINS に * を入れていないか確認してください" "$hdr"
+  fi
+  echo "✓ CORS does not allow other origins"
+
+  # ----- フロント（Vercel）-----
+  page() { curl -sS --max-time 30 -o /tmp/smoke-page.$$ -w '%{http_code} %{content_type}' "$FRONT$1"; }
+  for path in / /login /games/1 /favorites; do
+    res=$(page "$path")
+    case "$res" in
+      "200 text/html"*) echo "✓ frontend serves $path (SPA rewrite)" ;;
+      *) fail "フロントの $path が HTML の 200 を返しません（$res）" "frontend/vercel.json の rewrites と、Vercel の Root Directory = frontend を確認してください" ;;
+    esac
+  done
+  # index.html から、ビルドされた JS を探して、API の URL を向いているか確認する
+  curl -sS --max-time 30 "$FRONT/" -o /tmp/smoke-index.$$
+  asset=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' /tmp/smoke-index.$$ | head -1)
+  [ -n "$asset" ] || fail "index.html からビルドされた JS が見つかりません" "Vercel のビルドが成功しているか確認してください"
+  curl -sS --max-time 60 "$FRONT$asset" -o /tmp/smoke-bundle.$$
+  if grep -qF "$API" /tmp/smoke-bundle.$$; then
+    echo "✓ the built frontend points to this API ($API)"
+  else
+    fail "ビルドされたフロントが、この API の URL を向いていません" \
+      "Vercel の VITE_API_BASE_URL を $API にして、**再デプロイ**してください（VITE_ の変数は、ビルド時に埋め込まれるため、変更しただけでは反映されません）" \
+      "（開発用の既定値 http://localhost/api が埋め込まれていないか: $(grep -cF 'http://localhost/api' /tmp/smoke-bundle.$$ || true) 件）"
+  fi
+  rm -f /tmp/smoke-index.$$ /tmp/smoke-bundle.$$ /tmp/smoke-page.$$
+
+  # ----- PWA -----
+  res=$(curl -sS --max-time 30 -o /tmp/smoke-manifest.$$ -w '%{http_code}' "$FRONT/manifest.webmanifest")
+  [ "$res" = "200" ] && python3 -c "import json; m=json.load(open('/tmp/smoke-manifest.$$')); assert m['name']=='CourtQ' and m['display']=='standalone', m" \
+    && echo "✓ PWA manifest (CourtQ, standalone)" || fail "manifest.webmanifest が正しくありません（$res）"
+  rm -f /tmp/smoke-manifest.$$
+  hdr=$(curl -sS --max-time 30 -o /dev/null -D - "$FRONT/sw.js" | tr -d '\r')
+  echo "$hdr" | head -1 | grep -q " 200" || fail "sw.js（Service Worker）が 200 を返しません"
+  case "$(header_of "$hdr" content-type)" in *javascript*) ;; *) fail "sw.js の Content-Type が JavaScript ではありません（$(header_of "$hdr" content-type)）" ;; esac
+  case "$(header_of "$hdr" cache-control)" in *immutable*|*max-age=[1-9][0-9][0-9][0-9][0-9]*) fail "sw.js が長くキャッシュされる設定です（$(header_of "$hdr" cache-control)）" "更新が端末に届かなくなります。frontend/vercel.json の headers を確認してください" ;; esac
+  echo "✓ service worker is served and not cached for long"
+  res=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code} %{content_type}' "$FRONT/icons/icon-192.png")
+  case "$res" in "200 image/png"*) echo "✓ PWA icon" ;; *) fail "icons/icon-192.png が画像で返りません（$res）" ;; esac
 fi
 
 echo "All smoke checks passed."
