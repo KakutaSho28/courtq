@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Enums\CongestionLevel;
+use App\Events\BoothCongestionUpdated;
+use App\Events\ItemStockUpdated;
 use App\Enums\StockStatus;
 use App\Exceptions\ServiceException;
 use App\Models\Booth;
@@ -14,11 +16,14 @@ use App\Models\MenuItem;
 use App\Models\StockLog;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * スタッフ・管理者による混雑（STAFF-02）と在庫（STAFF-03）の更新。
  * 誰が更新してよいかは呼び出し前に Policy で確認済みの前提（ここでは認可しない）。
- * 現在値の更新と履歴の追加は 1 つのトランザクションで行い、確定後に一覧のキャッシュを捨てる。
+ * 現在値の更新と履歴の追加は 1 つのトランザクションで行い、確定後に一覧のキャッシュを捨ててから、
+ * 試合ごとの公開チャンネル（game.{gameId}）へ配信する。配信を最後にするのは、受け取った画面が一覧を取り直したときに
+ * 最新の値が返るようにするため（キャッシュが先に捨てられている）。
  */
 class BoothStatusService
 {
@@ -44,6 +49,7 @@ class BoothStatusService
         });
 
         $this->booths->forgetList($game);
+        $this->announce(BoothCongestionUpdated::fromGameBooth($gameBooth));
 
         return $gameBooth->setRelation('booth', $booth);
     }
@@ -75,7 +81,21 @@ class BoothStatusService
         });
 
         $this->booths->forgetList($game);
+        $this->announce(ItemStockUpdated::fromItemStock($stock, $item));
 
         return $stock;
+    }
+
+    /**
+     * リアルタイム配信。ここで失敗しても（Pusher の障害、キューの不調）、スタッフの更新自体は成功させる。
+     * 更新は確定済みで、画面は再接続・再読み込み・定期的な取り直しで追いつくため。失敗は記録だけする。
+     */
+    private function announce(object $event): void
+    {
+        try {
+            event($event);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 }

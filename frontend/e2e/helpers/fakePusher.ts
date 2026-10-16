@@ -7,8 +7,12 @@ import type { Page, WebSocketRoute } from '@playwright/test';
 export type FakePusher = {
   /** サーバーからイベントを配信する（Laravel の broadcast に相当） */
   push: (channel: string, event: string, data: unknown) => void;
-  /** 購読済みのチャンネル名 */
+  /** 購読したチャンネル名（購読した順） */
   subscribed: string[];
+  /** 購読をやめたチャンネル名（画面を離れたとき） */
+  unsubscribed: string[];
+  /** 受け付けた接続の数（切断して再接続すると増える） */
+  connections: () => number;
   /** 接続を切る（切断表示の確認用） */
   drop: () => void;
 };
@@ -16,6 +20,7 @@ export type FakePusher = {
 export async function fakePusher(page: Page): Promise<FakePusher> {
   const sockets: WebSocketRoute[] = [];
   const subscribed: string[] = [];
+  const unsubscribed: string[] = [];
 
   await page.routeWebSocket(/ws-ap3\.pusher\.com/, (ws) => {
     sockets.push(ws);
@@ -36,6 +41,8 @@ export async function fakePusher(page: Page): Promise<FakePusher> {
             data: '{}',
           }),
         );
+      } else if (message.event === 'pusher:unsubscribe' && message.data.channel) {
+        unsubscribed.push(message.data.channel);
       } else if (message.event === 'pusher:ping') {
         ws.send(JSON.stringify({ event: 'pusher:pong', data: '{}' }));
       }
@@ -44,6 +51,8 @@ export async function fakePusher(page: Page): Promise<FakePusher> {
 
   return {
     subscribed,
+    unsubscribed,
+    connections: () => sockets.length,
     push: (channel, event, data) => {
       for (const ws of sockets) {
         ws.send(JSON.stringify({ event, channel, data: JSON.stringify(data) }));

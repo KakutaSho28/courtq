@@ -64,3 +64,42 @@ test('Pusher のキー未設定の環境ではバッジを出さず、通常ど�
   await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
   await expect(page.locator('.realtime-badge')).toHaveCount(0);
 });
+
+test.describe('Pusher のキー未設定でも、画面は古いまま止まらない', () => {
+  // ポート 5174 の dev サーバーは Pusher のキーを設定していない（リアルタイムは無効）
+  test.use({ baseURL: 'http://localhost:5174' });
+
+  test('ブース一覧は 30 秒ごとに取り直し、サーバーの更新に追いつく。画面が見えていないときは取り直さない', async ({ page }) => {
+    const { NOW, NOW_ISO, booths, mockCourtqApi } = await import('./helpers/courtqApi');
+    let changed = false;
+    const calls = await mockCourtqApi(page, {
+      override: async (path, route) => {
+        if (path === '/games/1/booths' && changed) {
+          const list = booths().map((b) => (b.booth_id === 4 ? { ...b, congestion: { level: 1, label: '空いている', wait_minutes: 0, updated_at: NOW_ISO, is_stale: false } } : b));
+          await route.fulfill({ json: { data: list, meta: { stale_after_minutes: 15 } } });
+          return true;
+        }
+        return false;
+      },
+    });
+    await page.clock.install({ time: NOW });
+    await page.goto('/games/1');
+    const drink = page.getByRole('listitem').filter({ has: page.getByText('ハーフタイム・ドリンク', { exact: true }) });
+    await expect(drink).toContainText('非常に混雑');
+    await expect(page.locator('.realtime-badge')).toHaveCount(0);
+    const boothCalls = () => calls.filter((c) => c.path === '/games/1/booths').length;
+    const before = boothCalls();
+
+    changed = true;
+    await page.clock.runFor(31_000);
+
+    await expect(drink).toContainText('空いている');
+    expect(boothCalls()).toBeGreaterThan(before);
+
+    // 画面が隠れている間（別のタブなど）は取り直さない
+    await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }));
+    const hidden = boothCalls();
+    await page.clock.runFor(95_000);
+    expect(boothCalls()).toBe(hidden);
+  });
+});
