@@ -2,7 +2,11 @@
 
 namespace App\Http;
 
+use App\Http\Middleware\EnsureRole;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
+use Illuminate\Routing\Router;
 
 class Kernel extends HttpKernel
 {
@@ -55,6 +59,7 @@ class Kernel extends HttpKernel
      */
     protected $middlewareAliases = [
         'auth' => \App\Http\Middleware\Authenticate::class,
+        'role' => \App\Http\Middleware\EnsureRole::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
@@ -66,4 +71,13 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
     ];
+
+    public function __construct(Application $app, Router $router)
+    {
+        parent::__construct($app, $router);
+
+        // 役割の確認（role:...）を、ログイン確認の直後・レート制限と ID の解決（SubstituteBindings）・Policy（can:...）より前に行う。
+        // 一般ユーザーが存在しない ID を送っても 404 ではなく 403 になり、ID の有無を探れないようにするため。
+        $this->addToMiddlewarePriorityAfter(AuthenticatesRequests::class, EnsureRole::class);
+    }
 }

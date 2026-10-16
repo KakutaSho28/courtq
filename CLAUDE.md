@@ -16,7 +16,8 @@ CourtQ（コートキュー = Court + Queue）は、バスケットボールの�
 
 ```
 backend/            Laravel 本体
-  app/Http/Controllers/  Auth, Health, Game, Booth, Favorite（以降 WP で Staff, Admin を追加）
+  app/Http/Controllers/  Auth, Health, Game, Booth, Favorite, Staff*（スタッフ）, AdminBoothStaff（以降 WP で管理画面用の Admin を追加）
+  app/Http/Middleware/   EnsureRole（role:...）, UnescapedJsonResponse ほか
   app/Http/Requests/     FormRequest（バリデーション）
   app/Http/Resources/    API Resource（レスポンス整形）
   app/Services/          業務ロジック（Controller から呼ぶ）
@@ -63,7 +64,7 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 ## Coding rules
 
 - Frontend: TypeScript strict、`any` 禁止。UI 文言は日本語。アプリ名は `APP_NAME` を使う（直書きしない）。
-- Backend: バリデーションは FormRequest、レスポンスは Resource、認可は Policy（app/Policies）+ `$this->authorize()`。拒否時は Handler が共通の 403 `{"message":"この操作は許可されていません"}` を返す。
+- Backend: バリデーションは FormRequest、レスポンスは Resource、認可は Policy（app/Policies）をルートの `can:manage,<param>` ミドルウェアで呼ぶ。拒否時は Handler が共通の 403 `{"message":"この操作は許可されていません"}` を返す。
 - レスポンス形式: 成功 `{ "data": ... }`、エラー / メッセージ `{ "message": ... }`（422 のみ `errors` を追加）。メッセージは日本語。
 - **ロールをクライアントから受け取らない**（`role` は `$fillable` に入れない。付与はサーバー側の処理だけ）。
 - 新しい環境変数は必ず `.env.example`（root / backend / frontend の該当箇所）に追加する。秘密情報はコミットしない。
@@ -77,7 +78,7 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 |---|---|---|
 | FormRequest | バリデーションのみ | 認可・業務ロジック |
 | Policy (`app/Policies`) | 認可のみ | クエリ・更新処理 |
-| Controller | 受信 → `$this->authorize()` → Service 呼び出し → Resource を返す。1アクション ~15行まで | 業務ロジック、複数ステップの DB 処理、トークン生成、ジョブ dispatch |
+| Controller | 受信 → Service 呼び出し → Resource を返す（認可はルートの `role:` / `can:` ミドルウェアで済ませる。下の「認可」）。1アクション ~15行まで | 業務ロジック、複数ステップの DB 処理、トークン生成、ジョブ dispatch |
 | Service (`app/Services`) | 業務ロジックとトランザクション。依存はコンストラクタ注入。業務ルール違反は `ServiceException`（Handler が `{message}` + status に変換） | `Request` オブジェクトを受け取る、JSON を組み立てる |
 | Resource | JSON 整形の唯一の場所 | — |
 
@@ -89,7 +90,11 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 
 ## 認可（書き込み API の守り方）
 
-- 混雑・在庫を書き込めるのは staff（自分のブースのみ）と admin だけ。**サーバー側で必ず強制する**: `auth:sanctum` → `role:staff,admin` / `role:admin`（`EnsureRole`）→ Policy（`BoothPolicy@manage`: admin、または `booth_staff` に含まれる）→ FormRequest → `throttle`。
+- 混雑・在庫を書き込めるのは staff（自分のブースのみ）と admin だけ。**サーバー側で必ず強制する**。実際に評価される順番: `auth:sanctum`（401）→ `role:staff,admin` / `role:admin`（`EnsureRole`、403）→ `throttle`（429）→ ID の解決（404）→ `can:manage,booth` / `can:manage,menuItem`（`BoothPolicy` / `MenuItemPolicy`、403）→ FormRequest（422）。
+  - `EnsureRole` は `App\Http\Kernel` でミドルウェアの優先順位に登録し、ID の解決より前に動かす（一般ユーザーは存在しない ID でも 403）。
+  - Policy はコントローラの `$this->authorize()` ではなく、ルートの `can` ミドルウェアで呼ぶ（FormRequest より前に評価し、他人のブースへの不正な入力を 422 ではなく 403 にするため）。
+  - ブースの下のリソース（メニュー）は `scopeBindings()` で「URL のブースのもの」に限って解決する（他のブースの ID は 404）。
+  - ルールの一覧は `docs/progress.md`「WP-B4 の認可ルール」。テストは `tests/Feature/AuthorizationTest.php` の `MATRIX`（書き込み API を足したら行を足す。足さないと `test_every_protected_route_is_in_the_matrix` が失敗する）。
 - CORS は直接の API 呼び出しを防がない（ブラウザの画面からの呼び出しを制限するだけ）。守っているのはサーバー側の認可。
 - 認可のテストを省略しない。特に「一般ユーザーが自分のトークンで書き込み API を直接叩くと 403」を全書き込み API で検証する。
 

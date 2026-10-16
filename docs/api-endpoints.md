@@ -23,7 +23,7 @@
 
 ### 権限の考え方
 
-役割（`role`）は `user`（既定）/ `staff` / `admin`。**サーバーが決めるもので、クライアントからは受け取らない**。混雑・在庫の更新は、認証 → ロール（`role:staff,admin`）→ ブースの担当判定（Policy）→ 入力検証 → レート制限の順にサーバー側で検査する（CORS は直接の API 呼び出しを防がないため、守りはサーバーの認可）。役割に応じた API は WP-B4 で追加し、この表を更新する。
+役割（`role`）は `user`（既定）/ `staff` / `admin`。**サーバーが決めるもので、クライアントからは受け取らない**。混雑・在庫の更新は、認証（401）→ 役割（`role:staff,admin`、403）→ レート制限（429）→ ID の解決（404）→ ブースの担当判定（Policy、403）→ 入力検証（422）の順にサーバー側で検査する。役割の確認は ID の解決より前なので、一般ユーザーは存在しない ID を送っても 403 になる（CORS は直接の API 呼び出しを防がないため、守りはサーバーの認可）。各エンドポイントの「権限」は、ルートのミドルウェア（`role:` / `can:manage` / `throttle:`）から自動で書き出している。一般ユーザーが自分のトークンで書き込み API を直接呼んでも 403 になることを、全書き込み API についてテスト（`AuthorizationTest`）で確認している。
 
 | 操作 | user | staff | admin |
 |---|---|---|---|
@@ -35,41 +35,61 @@
 
 ### システム
 
-| メソッド | パス | 認証 | 概要 |
+| メソッド | パス | 権限 | 概要 |
 |---|---|---|---|
-| GET | `/api/health` | 不要 | ヘルスチェック |
+| GET | `/api/health` | 誰でも | ヘルスチェック |
 
 ### 認証
 
-| メソッド | パス | 認証 | 概要 |
+| メソッド | パス | 権限 | 概要 |
 |---|---|---|---|
-| POST | `/api/auth/register` | 不要 | ユーザー登録 |
-| POST | `/api/auth/login` | 不要 | ログイン |
-| POST | `/api/auth/logout` | 必要 | ログアウト |
-| GET | `/api/me` | 必要 | ログイン中のユーザー |
+| POST | `/api/auth/register` | 誰でも | ユーザー登録 |
+| POST | `/api/auth/login` | 誰でも | ログイン |
+| POST | `/api/auth/logout` | ログインユーザー全員 | ログアウト |
+| GET | `/api/me` | ログインユーザー全員 | ログイン中のユーザー |
 
 ### 試合
 
-| メソッド | パス | 認証 | 概要 |
+| メソッド | パス | 権限 | 概要 |
 |---|---|---|---|
-| GET | `/api/games` | 必要 | 試合の一覧（GAME-01） |
-| GET | `/api/games/{game}` | 必要 | 試合の詳細（GAME-02） |
+| GET | `/api/games` | ログインユーザー全員 | 試合の一覧（GAME-01） |
+| GET | `/api/games/{game}` | ログインユーザー全員 | 試合の詳細（GAME-02） |
 
 ### ブース
 
-| メソッド | パス | 認証 | 概要 |
+| メソッド | パス | 権限 | 概要 |
 |---|---|---|---|
-| GET | `/api/games/{game}/booths` | 必要 | 試合のブース一覧（BOOTH-01） |
-| GET | `/api/games/{game}/booths/{booth}` | 必要 | ブースの詳細（BOOTH-02） |
-| GET | `/api/games/{game}/booths/{booth}/congestion-history` | 必要 | 混雑の履歴（BOOTH-03） |
+| GET | `/api/games/{game}/booths` | ログインユーザー全員 | 試合のブース一覧（BOOTH-01） |
+| GET | `/api/games/{game}/booths/{booth}` | ログインユーザー全員 | ブースの詳細（BOOTH-02） |
+| GET | `/api/games/{game}/booths/{booth}/congestion-history` | ログインユーザー全員 | 混雑の履歴（BOOTH-03） |
 
 ### お気に入り
 
-| メソッド | パス | 認証 | 概要 |
+| メソッド | パス | 権限 | 概要 |
 |---|---|---|---|
-| GET | `/api/me/favorites` | 必要 | お気に入りのブース（FAV-01） |
-| PUT | `/api/booths/{booth}/favorite` | 必要 | お気に入りに追加（FAV-02） |
-| DELETE | `/api/booths/{booth}/favorite` | 必要 | お気に入りから外す（FAV-03） |
+| GET | `/api/me/favorites` | ログインユーザー全員 | お気に入りのブース（FAV-01） |
+| PUT | `/api/booths/{booth}/favorite` | ログインユーザー全員 | お気に入りに追加（FAV-02） |
+| DELETE | `/api/booths/{booth}/favorite` | ログインユーザー全員 | お気に入りから外す（FAV-03） |
+
+### スタッフ
+
+| メソッド | パス | 権限 | 概要 |
+|---|---|---|---|
+| GET | `/api/staff/booths` | staff, admin | 管理できるブース（STAFF-01） |
+| PUT | `/api/staff/games/{game}/booths/{booth}/congestion` | staff, admin・担当ブースのみ（admin は全ブース）（30 回/分/ユーザー） | 混雑の更新（STAFF-02） |
+| PUT | `/api/staff/games/{game}/menu-items/{menuItem}/stock` | staff, admin・担当ブースのみ（admin は全ブース）（30 回/分/ユーザー） | 在庫の更新（STAFF-03） |
+| POST | `/api/staff/booths/{booth}/menu-items` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの追加（STAFF-04） |
+| PUT | `/api/staff/booths/{booth}/menu-items/{menuItem}` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの変更（STAFF-04） |
+| DELETE | `/api/staff/booths/{booth}/menu-items/{menuItem}` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの削除（STAFF-04） |
+| POST | `/api/staff/invitations/accept` | ログインユーザー全員（10 回/分/ユーザー） | 招待コードを使う（STAFF-05） |
+
+### 管理者
+
+| メソッド | パス | 権限 | 概要 |
+|---|---|---|---|
+| POST | `/api/admin/booths/{booth}/invitations` | admin | 招待コードの発行（ADMIN-05） |
+| GET | `/api/admin/booths/{booth}/staff` | admin | ブースの担当スタッフ（ADMIN-06） |
+| DELETE | `/api/admin/booths/{booth}/staff/{user}` | admin | 担当の解除（ADMIN-06） |
 
 ---
 
@@ -79,6 +99,7 @@
 
 - 実装: `App\Http\Controllers\HealthController`
 - 認証: 不要
+- 権限: 誰でも
 
 DB に接続できるかを確認する。稼働監視と Railway の healthcheck が使う。DB に接続できないときは 503。
 
@@ -115,6 +136,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\AuthController@register`
 - 認証: 不要
+- 権限: 誰でも
 
 登録と同時にトークンを発行する。以降は `Authorization: Bearer <token>` を付ける。登録されるユーザーの役割は常に一般ユーザー（`role` はクライアントから受け取らない）。
 
@@ -147,7 +169,9 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
         "user": {
             "id": 1,
             "name": "アリス",
-            "email": "alice@example.com"
+            "email": "alice@example.com",
+            "role": "user",
+            "booths": []
         },
         "token": "1|abcdef...（Sanctum のトークン）"
     }
@@ -184,6 +208,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\AuthController@login`
 - 認証: 不要
+- 権限: 誰でも
 
 既存のトークンはすべて失効し、新しいトークンを発行する（多重ログイン防止）。ログイン処理は `AuthService` に集約しており、外部 ID プロバイダ（SSO / OAuth）を追加するときもここを拡張する。同じメール + IP からは 1 分に 10 回まで。
 
@@ -213,7 +238,9 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
         "user": {
             "id": 1,
             "name": "アリス",
-            "email": "alice@example.com"
+            "email": "alice@example.com",
+            "role": "user",
+            "booths": []
         },
         "token": "1|abcdef...（Sanctum のトークン）"
     }
@@ -246,6 +273,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\AuthController@logout`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 現在のトークンを失効させる。
 
@@ -276,8 +304,9 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\AuthController@me`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
-役割（`role`）と担当ブースは WP-B4 で追加する。
+`role` は `user` / `staff` / `admin`。`booths` は担当登録（`booth_staff`）されたブース。admin は全ブースを管理できるが、`booths` には担当登録したブースだけが入る。
 
 **レスポンス**
 
@@ -286,9 +315,16 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 ```json
 {
     "data": {
-        "id": 1,
-        "name": "アリス",
-        "email": "alice@example.com"
+        "id": 2,
+        "name": "スタッフ サクラ",
+        "email": "staff1@example.com",
+        "role": "staff",
+        "booths": [
+            {
+                "booth_id": 1,
+                "name": "から揚げスタンド"
+            }
+        ]
     }
 }
 ```
@@ -310,6 +346,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\GameController@index`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 今日開催の試合が先頭で、あとは開始時刻の早い順（最大 100 件）。`date` を指定するとその日の試合だけ、`from` を指定するとその日以降の試合だけ。どちらも省略すると今日以降の試合。日付はアプリのタイムゾーン（日本時間）で扱う。
 
@@ -369,6 +406,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\GameController@show`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 **パスパラメータ**: `game`
 
@@ -419,6 +457,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\BoothController@index`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 混雑（4 段階 + 待ち時間）と最終更新を含む軽い一覧。メニューは含まない（詳細で取る）。全員に共通の部分はサーバーで 20 秒（`COURTQ_LIST_CACHE_SECONDS`）キャッシュされ、混雑・在庫を更新すると破棄される。お気に入りの印と絞り込みはユーザーごとにキャッシュの外で付ける。
 
@@ -505,6 +544,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\BoothController@show`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 混雑と、販売中のメニュー（`kind` が `food` / `merch`。画面で飲食・物販に分ける）、その試合の在庫と最終更新。在庫がまだ登録されていないメニューは `stock` が null。そのブースがこの試合に出店していないときは 404。
 
@@ -580,6 +620,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\BoothController@congestionHistory`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 混雑の推移のグラフ用。古い順で、直近の最大 200 件。更新したユーザーは返さない。
 
@@ -627,6 +668,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\FavoriteController@index`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 自分のお気に入りだけを名前順で返す。試合ごとの混雑は、ブース一覧の `favorites=1` で取る。
 
@@ -664,6 +706,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\FavoriteController@store`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 追加済みでも成功する（冪等）。どの役割でも使える。
 
@@ -707,6 +750,7 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 
 - 実装: `App\Http\Controllers\FavoriteController@destroy`
 - 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員
 
 外れていても成功する（冪等）。
 
@@ -738,6 +782,691 @@ DB に接続できるかを確認する。稼働監視と Railway の healthchec
 ```json
 {
     "message": "見つかりません"
+}
+```
+
+
+---
+
+## GET `/api/staff/booths`
+
+**管理できるブース（STAFF-01）**
+
+- 実装: `App\Http\Controllers\StaffBoothController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin
+
+staff は担当ブースだけ、admin は全ブース。各ブースに、今日以降の出店予定を開始時刻の早い順で最大 3 件と、その試合の混雑の現在値を付ける（スタッフ画面から今日の試合の更新画面をすぐ開けるように）。
+
+**レスポンス**
+
+- `200` ブースの一覧
+
+```json
+{
+    "data": [
+        {
+            "booth_id": 1,
+            "name": "から揚げスタンド",
+            "category": "food",
+            "location_label": "2F コンコース東",
+            "upcoming_games": [
+                {
+                    "game_id": 1,
+                    "game_booth_id": 10,
+                    "home_team": "ベイサイド・ダイナモ",
+                    "away_team": "シティ・ラインズ",
+                    "tipoff_at": "2026-10-16T19:05:00+09:00",
+                    "status": "live",
+                    "is_open": true,
+                    "congestion": {
+                        "level": 3,
+                        "label": "混雑",
+                        "wait_minutes": 25,
+                        "updated_at": "2026-10-16T19:27:00+09:00",
+                        "is_stale": false
+                    }
+                }
+            ]
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+
+---
+
+## PUT `/api/staff/games/{game}/booths/{booth}/congestion`
+
+**混雑の更新（STAFF-02）**
+
+- 実装: `App\Http\Controllers\StaffStatusController@updateCongestion`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin・担当ブースのみ（admin は全ブース）（30 回/分/ユーザー）
+
+担当ブースの混雑（4 段階）と待ち時間を更新する。現在値を書き換え、`congestion_logs` に 1 行追加し、ブース一覧のキャッシュを捨てる。一般ユーザー・他のブースのスタッフは 403（入力が不正でも 403 が先）。そのブースがこの試合に出店していなければ 404。
+
+**パスパラメータ**: `game`、`booth`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `level` | `required` `integer` `in:"1","2","3","4"` |
+| `wait_minutes` | `nullable` `integer` `min:0` `max:180` |
+
+**リクエスト例**
+
+```json
+{
+    "level": 3,
+    "wait_minutes": 25
+}
+```
+
+**レスポンス**
+
+- `200` 更新した
+
+```json
+{
+    "data": {
+        "game_id": 1,
+        "booth_id": 1,
+        "game_booth_id": 10,
+        "is_open": true,
+        "congestion": {
+            "level": 3,
+            "label": "混雑",
+            "wait_minutes": 25,
+            "updated_at": "2026-10-16T19:27:00+09:00",
+            "is_stale": false
+        }
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 試合・ブースが存在しない / この試合に出店していない
+
+```json
+{
+    "message": "この試合に出店していないブースです"
+}
+```
+
+- `422` 入力不正（level は 1〜4、wait_minutes は 0〜180 または null）
+- `429` レート制限
+
+```json
+{
+    "message": "リクエストが多すぎます。しばらくしてからもう一度お試しください"
+}
+```
+
+
+---
+
+## PUT `/api/staff/games/{game}/menu-items/{menuItem}/stock`
+
+**在庫の更新（STAFF-03）**
+
+- 実装: `App\Http\Controllers\StaffStatusController@updateStock`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin・担当ブースのみ（admin は全ブース）（30 回/分/ユーザー）
+
+担当ブースのメニューの、この試合の在庫を作成または更新する（試合 × メニューで 1 行）。`stock_logs` に 1 行追加し、ブース一覧のキャッシュを捨てる。同じ値を送っても最終更新（`updated_at`）は新しくなる（「いま確認した」ことを伝えるため）。そのメニューのブースがこの試合に出店していなければ 404。
+
+**パスパラメータ**: `game`、`menuItem`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `status` | `required` `string` `in:"in_stock","low","sold_out"` |
+| `quantity` | `nullable` `integer` `min:0` `max:99999` |
+
+**リクエスト例**
+
+```json
+{
+    "status": "low",
+    "quantity": 4
+}
+```
+
+**レスポンス**
+
+- `200` 更新した
+
+```json
+{
+    "data": {
+        "game_id": 1,
+        "menu_item_id": 1,
+        "stock": {
+            "status": "low",
+            "label": "残りわずか",
+            "quantity": 4,
+            "updated_at": "2026-10-16T19:30:00+09:00",
+            "is_stale": false
+        }
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 試合・メニューが存在しない / この試合に出店していない
+
+```json
+{
+    "message": "この試合に出店していないブースのメニューです"
+}
+```
+
+- `422` 入力不正（status は in_stock / low / sold_out、quantity は 0 以上の整数または null）
+- `429` レート制限
+
+```json
+{
+    "message": "リクエストが多すぎます。しばらくしてからもう一度お試しください"
+}
+```
+
+
+---
+
+## POST `/api/staff/booths/{booth}/menu-items`
+
+**メニューの追加（STAFF-04）**
+
+- 実装: `App\Http\Controllers\StaffMenuItemController@store`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin・担当ブースのみ（admin は全ブース）
+
+担当ブースにメニューを追加する。`is_active` を省略すると販売中。
+
+**パスパラメータ**: `booth`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `name` | `required` `string` `max:100` |
+| `kind` | `required` `string` `in:"food","merch"` |
+| `price` | `required` `integer` `min:0` `max:1000000` |
+| `description` | `nullable` `string` `max:500` |
+| `is_active` | `sometimes` `boolean` |
+
+**リクエスト例**
+
+```json
+{
+    "name": "から揚げ 5 個",
+    "kind": "food",
+    "price": 700,
+    "description": null,
+    "is_active": true
+}
+```
+
+**レスポンス**
+
+- `201` 追加した
+
+```json
+{
+    "data": {
+        "id": 1,
+        "booth_id": 1,
+        "name": "から揚げ 5 個",
+        "kind": "food",
+        "price": 700,
+        "description": null,
+        "is_active": true
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 入力不正
+
+---
+
+## PUT `/api/staff/booths/{booth}/menu-items/{menuItem}`
+
+**メニューの変更（STAFF-04）**
+
+- 実装: `App\Http\Controllers\StaffMenuItemController@update`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin・担当ブースのみ（admin は全ブース）
+
+送った項目だけを変える。販売をやめるときは `is_active: false`。メニューは URL のブースのものに限って探すので、他のブースのメニュー ID を指定すると 404。
+
+**パスパラメータ**: `booth`、`menuItem`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `name` | `sometimes` `required` `string` `max:100` |
+| `kind` | `sometimes` `required` `string` `in:"food","merch"` |
+| `price` | `sometimes` `required` `integer` `min:0` `max:1000000` |
+| `description` | `sometimes` `nullable` `string` `max:500` |
+| `is_active` | `sometimes` `boolean` |
+
+**リクエスト例**
+
+```json
+{
+    "price": 800,
+    "is_active": false
+}
+```
+
+**レスポンス**
+
+- `200` 変更した
+
+```json
+{
+    "data": {
+        "is_active": false,
+        "price": 800,
+        "id": 1,
+        "booth_id": 1,
+        "name": "から揚げ 5 個",
+        "kind": "food",
+        "description": null
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 入力不正
+
+---
+
+## DELETE `/api/staff/booths/{booth}/menu-items/{menuItem}`
+
+**メニューの削除（STAFF-04）**
+
+- 実装: `App\Http\Controllers\StaffMenuItemController@destroy`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin・担当ブースのみ（admin は全ブース）
+
+在庫の記録がまだ無いメニューだけ削除できる（削除すると在庫の履歴も消えるため）。記録があるときは 422 で、`is_active: false` にしてもらう。
+
+**パスパラメータ**: `booth`、`menuItem`
+
+**レスポンス**
+
+- `200` 削除した
+
+```json
+{
+    "message": "メニューを削除しました"
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 在庫の記録がある
+
+```json
+{
+    "message": "在庫の記録があるメニューは削除できません。販売をやめるときは「販売中」をオフにしてください"
+}
+```
+
+
+---
+
+## POST `/api/staff/invitations/accept`
+
+**招待コードを使う（STAFF-05）**
+
+- 実装: `App\Http\Controllers\StaffInvitationController@accept`
+- 認証: 必要（Bearer トークン）
+- 権限: ログインユーザー全員（10 回/分/ユーザー）
+
+ログインしていれば誰でも使える。コードは大文字・小文字、ハイフン、空白、全角を区別しない。使うとそのブースの担当になり、一般ユーザーはスタッフになる（admin は役割を変えない）。無効・期限切れ・使用済みはすべて同じ 422（どれに当たったかを推測させないため）。総当たり対策で 1 ユーザー 10 回/分。
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `code` | `required` `string` `max:32` |
+
+**リクエスト例**
+
+```json
+{
+    "code": "K7Q2-MX9P"
+}
+```
+
+**レスポンス**
+
+- `200` 担当になった
+
+```json
+{
+    "data": {
+        "user": {
+            "id": 2,
+            "name": "スタッフ サクラ",
+            "email": "staff1@example.com",
+            "role": "staff",
+            "booths": [
+                {
+                    "booth_id": 1,
+                    "name": "から揚げスタンド"
+                }
+            ]
+        },
+        "booth": {
+            "booth_id": 1,
+            "name": "から揚げスタンド"
+        }
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `422` コードが無効・期限切れ・使用済み
+
+```json
+{
+    "message": "招待コードが正しくないか、有効期限が切れています"
+}
+```
+
+- `429` レート制限
+
+```json
+{
+    "message": "リクエストが多すぎます。しばらくしてからもう一度お試しください"
+}
+```
+
+
+---
+
+## POST `/api/admin/booths/{booth}/invitations`
+
+**招待コードの発行（ADMIN-05）**
+
+- 実装: `App\Http\Controllers\AdminBoothStaffController@invite`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+見間違えやすい 0 / O / 1 / I / L を除いた英数字 8 文字（4 文字ずつ区切って返す）。1 回限りで、有効期限は 7 日（`COURTQ_INVITATION_TTL_DAYS`）。
+
+**パスパラメータ**: `booth`
+
+**レスポンス**
+
+- `201` 発行した
+
+```json
+{
+    "data": {
+        "code": "K7Q2-MX9P",
+        "booth": {
+            "booth_id": 1,
+            "name": "から揚げスタンド"
+        },
+        "expires_at": "2026-10-23T19:30:00+09:00"
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+
+---
+
+## GET `/api/admin/booths/{booth}/staff`
+
+**ブースの担当スタッフ（ADMIN-06）**
+
+- 実装: `App\Http\Controllers\AdminBoothStaffController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+**パスパラメータ**: `booth`
+
+**レスポンス**
+
+- `200` 担当スタッフ
+
+```json
+{
+    "data": [
+        {
+            "user_id": 2,
+            "name": "スタッフ サクラ",
+            "email": "staff1@example.com",
+            "role": "staff"
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+
+---
+
+## DELETE `/api/admin/booths/{booth}/staff/{user}`
+
+**担当の解除（ADMIN-06）**
+
+- 実装: `App\Http\Controllers\AdminBoothStaffController@destroy`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+担当ブースが 0 件になった staff は user に戻す（使わない権限を残さないため）。admin の役割は変えない。そのブースの担当でないユーザーを指定すると 404。
+
+**パスパラメータ**: `booth`、`user`
+
+**レスポンス**
+
+- `200` 解除した
+
+```json
+{
+    "message": "担当を解除しました"
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` ブース・ユーザーが存在しない / 担当ではない
+
+```json
+{
+    "message": "このブースの担当ではありません"
 }
 ```
 
