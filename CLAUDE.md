@@ -83,7 +83,7 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 - 再利用するクエリ条件は Eloquent の local scope にする。**Repository パターンは導入しない**（`app/Repositories` を作らない）。
 - **新機能は service-first で書く**: まず Service とそのテスト（`tests/Feature/Services`）、次に Controller / Route / Resource。
 - 新しい Service には Feature テストを必ず付ける。
-- ログイン処理は `AuthService` に集約する（外部 ID プロバイダを後から足せるようにするため。`users.provider` / `provider_user_id` は WP-B2 で追加）。
+- ログイン処理は `AuthService` に集約する（外部 ID プロバイダを後から足せるようにするため。`users.provider` / `provider_user_id` 列は追加済み。拡張方法は AuthService のコメントを参照）。
 - `env()` は `config/` の中でのみ使う（本番の `config:cache` 後は null になる）。アプリコードは `config()` を使う。
 
 ## 認可（書き込み API の守り方）
