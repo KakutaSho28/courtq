@@ -1,5 +1,8 @@
 # WP-B0 計画: Spovie の基盤から CourtQ を作る
 
+> **更新（2026-10-16）**: この計画書は Spovie と同じ **Laravel 10** を前提に書いたが、実際の WP-B1 は別の作業で先に完了し、その後 [PR #2](https://github.com/KakutaSho28/courtq/pull/2) で **Laravel 12** に上げた（Laravel 10 は修正版が出ない脆弱性が残るため）。CourtQ は **Laravel 12 を採用する**。Laravel 12 で変わる点は末尾の「8. Laravel 12 での注意」にまとめた。
+> WP-B1 の実装と検証の結果は [`progress.md`](progress.md) を参照。
+
 作業指示（`claude-code-booth-prompt.md`）と Spovie リポジトリ（`KakutaSho28/spovie`、`main` の `89e6bfb` を読み取り専用で確認）をもとに、
 **どのファイルをコピー / 手直し / 新規作成 / 持ち込まないか**を決めた計画書です。WP-B1 以降はこの表に沿って進めます。
 
@@ -16,7 +19,7 @@
 
 ## 1. 結論（要点）
 
-- Spovie の基盤（Docker / Laravel 10 + Sanctum / Service 層ルール / CI / 本番 Dockerfile / Railway・Vercel 設定 / React + TS + Vite / API クライアント / 認証ストア / Echo / PWA / e2e）は **ほぼそのまま流用できる**。
+- Spovie の基盤（Docker / Laravel + Sanctum（Spovie は Laravel 10、CourtQ は 12）/ Service 層ルール / CI / 本番 Dockerfile / Railway・Vercel 設定 / React + TS + Vite / API クライアント / 認証ストア / Echo / PWA / e2e）は **ほぼそのまま流用できる**。
 - ただし作業指示が「Spovie にある」と想定しているもののうち、**実際には Spovie に無いもの**があるため、WP-B1 で新規に作る（→ 4 章）。
   - 401 / 404 / 422 / 429 の日本語 JSON エラー（Spovie の Handler は `ServiceException` と 403 だけ）
   - `GET /api/me`（AUTH-04）
@@ -108,7 +111,7 @@
 | Spovie のファイル | 区分 | CourtQ での扱い |
 |---|---|---|
 | `app/Exceptions/ServiceException.php` | C | |
-| `app/Exceptions/Handler.php` | A + N | 既存の ServiceException / 403 に加え、`api/*` で **401「認証が必要です」・404「見つかりません」・429「リクエストが多すぎます…」** を日本語 `{message}` で返す処理を追加。422 は `lang/ja/validation.php` で日本語化し、`{message, errors}` 形式は Laravel 標準のまま |
+| `app/Exceptions/Handler.php` | A + N | 既存の ServiceException / 403 に加え、`api/*` で **401「ログインが必要です」・404「見つかりません」・429「リクエストが多すぎます…」** を日本語 `{message}` で返す処理を追加。422 は `lang/ja/validation.php` で日本語化し、`{message, errors}` 形式は Laravel 標準のまま |
 | — | N | `lang/ja/validation.php`（+ `auth.php` 等の最小限）。項目名（`attributes`）も日本語に |
 | `app/Services/AuthService.php` | A | トークン名を `courtq` に。外部 ID プロバイダ用の拡張ポイント（`loginWithProvider()` は作らず、コメントと設計書で方針だけ示す。カラムは B2） |
 | `app/Http/Controllers/AuthController.php` | A + N | `me()`（AUTH-04）を追加。B1 時点では id / name / email / role（B2 でカラム追加後）、B4 で担当ブースを追加 |
@@ -216,3 +219,27 @@
 ## 7. スコープ外（作らない）
 
 画像アップロード（R2/S3 含む）、FFmpeg、外部の日程サイトの取り込み・スクレイピング、外部 ID プロバイダの実装（カラムと設計書での方針のみ）、B.LEAGUE の名称・ロゴ・公式ブランド。
+
+---
+
+## 8. Laravel 12 での注意（Spovie のコードを持ち込むときに見ること）
+
+WP-B1 の実装（`develop`）で確認した事実と、B2 以降で Spovie のコードを参考にするときの注意です。
+
+| 項目 | Laravel 10（Spovie） | CourtQ（Laravel 12） | Spovie のコードで必要な対応 |
+|---|---|---|---|
+| 依存パッケージ | `laravel/framework ^10` / `sanctum ^3.3` / `phpunit ^10` / `collision ^7` | `^12.0` / `^4.0` / `^11.5` / `^8.6`（PHP は `^8.2`） | `composer.json` と lock を作り直し済み。`doctrine/dbal` と `spatie/laravel-ignition` は不要なので削除済み |
+| アプリの骨組み | `app/Http/Kernel.php`・`app/Console/Kernel.php`・`Handler`・`config/app.php` の Provider 一覧 | **同じ構成のまま動く**（Laravel 12 は旧来の書き方も使える）。新しい `bootstrap/app.php` の流儀には移していない | 手直し不要。新しいミドルウェア（`EnsureRole`）は `Http/Kernel.php` のエイリアスに登録する |
+| 環境変数名 | `CACHE_DRIVER` / `BROADCAST_DRIVER` | Laravel 12 の雛形は `CACHE_STORE` / `BROADCAST_CONNECTION` だが、CourtQ の `config/*.php` は **旧名のまま**（`.env.example`・phpunit.xml・ドキュメントも旧名で揃っている） | **新旧を混ぜない**。deployment.md（B10）にも旧名で書く。雛形をコピーして新名の設定を持ち込むと、値が効かなくなる |
+| Sanctum 4 | Sanctum 3 の `config/sanctum.php` | `develop` の `config/sanctum.php` を使う（Bearer トークンのみで使い、cookie 認証は使わない） | Spovie の `config/sanctum.php` はコピーしない |
+| PHPUnit 11 | `test_` で始まるメソッド名のテスト | 引き続き使える | doc コメントの注釈（`@test` / `@dataProvider` など）は PHPUnit 11 で非推奨になった。Spovie のテストを参考にして注釈が出てきたら、`#[Test]` / `#[DataProvider]` の属性に書き換える |
+| マイグレーション | `->change()` に doctrine/dbal が必要だった | 不要（標準機能） | 既存カラムの型変更が必要になっても dbal は入れない |
+| PHP の実行環境 | CI は PHP 8.2 | 本番・CI は PHP 8.2、このセッションの検証は PHP 8.3.6 | 8.3 で通ったものは 8.2 の CI でも確認する |
+
+### 計画書と WP-B1 の実装の差
+
+WP-B1 の実装は計画書より進んでいる（日本語エラー・`/me`・throttle・`constants.ts`・公開チャンネル対応は実装済み）。計画書のうち実装と違う点:
+
+- 401 のメッセージは **「ログインが必要です」**（計画書は「認証が必要です」）。
+- 日本語化は `lang/ja/validation.php` のみ。
+- `config/filesystems.php` に S3 ディスクの設定が残っている（使わない設定。削除は任意。計画書 4.2 では削除予定だった）。
