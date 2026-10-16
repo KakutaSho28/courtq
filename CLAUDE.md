@@ -28,8 +28,12 @@ backend/            Laravel 本体
   tests/Feature/         機能テスト
   docs/api-examples.php  API 仕様書の説明・例（人が書く部分）
 frontend/src/
-  constants.ts           アプリ名・localStorage キー・API キャッシュ名
+  constants.ts           アプリ名・localStorage キー・API キャッシュ名・混雑の文言・表示のタイムゾーン（Asia/Tokyo）
   api/client.ts          Axios（トークン自動付与・401 で自動ログアウト）
+  api/courtq.ts          画面から呼ぶ API の関数と型（URL はここに集める）
+  lib/time.ts            「○分前」・鮮度（isStale）・日本時間の日付表示
+  hooks/useApiResource.ts 読み込み中 / エラー / オフラインの状態を返す共通の読み込み（online・画面復帰で取り直す）
+  pages/                 S01 Login / S02 Register / S03 Games / S04 BoothList / S05 BoothDetail / S06 Favorites
   store/auth.ts          Zustand 認証ストア
   lib/echo.ts            Echo シングルトン（公開チャンネルのみ）
   components/, hooks/, pages/, types/
@@ -69,6 +73,8 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 - **ロールをクライアントから受け取らない**（`role` は `$fillable` に入れない。付与はサーバー側の処理だけ）。
 - 新しい環境変数は必ず `.env.example`（root / backend / frontend の該当箇所）に追加する。秘密情報はコミットしない。
 - ブランド色は紺 `#14213D` / オレンジ `#FF7A1A`。**混雑の状態色（緑・黄・橙・赤）はブランドのオレンジと別の色**を使い、必ず文言（空いている / やや混雑 / 混雑 / 非常に混雑）と一緒に表示する（色だけで伝えない）。
+  - 状態色は `frontend/src/styles.css` の `--status-1〜4`（1 `#15803D` / 2 `#F5C400` / 3 `#C2410C` / 4 `#7F1D1D`）。色を変えるときは、文字とのコントラスト（4.5 以上）と、隣り合う段階・ブランドのオレンジとの色の差を数値で確かめる（値と根拠は styles.css のコメント）。
+  - 混雑は `CongestionBadge`（色 + 4 段階のメーター + 文言）、最終更新は `Freshness`（「最終更新 ○分前」と「情報が古い可能性があります」）を使う。鮮度は画面側で `updated_at` と `meta.stale_after_minutes` から計算する（オフラインで古いキャッシュを見ているときも正しく出すため）。
 - **B.LEAGUE の名称・チームロゴ・公式ブランドを UI・デモデータに使わない。** デモのチーム・会場・ブースはすべて架空にする。
 - スコープ外のものは作らない（画像アップロード、外部の日程サイトのスクレイピング／自動同期など）。
 
