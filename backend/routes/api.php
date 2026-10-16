@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // STAFF-04 メニューの管理（担当ブースだけ。メニューは URL のブースのものに限って解決する）
         Route::middleware('can:manage,booth')->scopeBindings()->group(function () {
+            Route::get('/booths/{booth}/menu-items', [StaffMenuItemController::class, 'index']);
             Route::post('/booths/{booth}/menu-items', [StaffMenuItemController::class, 'store']);
             Route::put('/booths/{booth}/menu-items/{menuItem}', [StaffMenuItemController::class, 'update']);
             Route::delete('/booths/{booth}/menu-items/{menuItem}', [StaffMenuItemController::class, 'destroy']);

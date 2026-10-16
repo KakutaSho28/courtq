@@ -9,7 +9,12 @@ export const NOW = new Date('2026-10-16T19:30:00+09:00');
 
 const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString().replace('Z', '+00:00');
 
-export const ALICE = { id: 1, name: 'アリス', email: 'a@example.com', role: 'user', booths: [] };
+export const ALICE = { id: 1, name: 'アリス', email: 'a@example.com', role: 'user', booths: [] as { booth_id: number; name: string }[] };
+/** ブース 2（フリースロー・カレー）の担当スタッフ */
+export const SAKURA = { id: 2, name: 'サクラ', email: 'sakura@example.com', role: 'staff', booths: [{ booth_id: 2, name: 'フリースロー・カレー' }] };
+/** 有効な招待コード（ブース 5「ウィングス・グッズ東」。表示は K7Q2-MX9P） */
+export const VALID_CODE = 'K7Q2MX9P';
+export const NOW_ISO = '2026-10-16T19:30:00+09:00';
 
 export const TODAY_GAME = {
   id: 1,
@@ -88,6 +93,8 @@ export const HISTORY = [
 
 type Options = {
   games?: unknown[];
+  /** ログインしているユーザー（既定は来場者のアリス） */
+  user?: typeof ALICE | typeof SAKURA;
   /** パス（/api を除く）ごとに応答を差し替える。関数を返すと、その呼び出しの応答になる */
   override?: (path: string, route: Route) => Promise<boolean> | boolean;
 };
@@ -98,13 +105,28 @@ export type Recorded = { method: string; path: string; query: string };
 export async function mockCourtqApi(page: Page, options: Options = {}): Promise<Recorded[]> {
   const calls: Recorded[] = [];
   const favorites = new Set(booths().filter((b) => b.is_favorite).map((b) => b.booth_id));
+  let me: typeof ALICE | typeof SAKURA = options.user ?? ALICE;
+
+  // スタッフの更新が反映される状態（ブース 2 の混雑、メニューの在庫、メニュー一覧）
+  const congestionOf: Record<number, ReturnType<typeof congestion>> = {};
+  const stockOf: Record<number, Record<string, unknown> | null> = {};
+  let menu: { id: number; booth_id: number; name: string; kind: string; price: number; description: string | null; is_active: boolean }[] = [
+    { id: 21, booth_id: 2, name: 'ビーフカレー', kind: 'food', price: 900, description: null, is_active: true },
+    { id: 22, booth_id: 2, name: 'カツカレー', kind: 'food', price: 1200, description: '数量限定', is_active: true },
+    { id: 23, booth_id: 2, name: 'ナン', kind: 'food', price: 300, description: null, is_active: true },
+    { id: 24, booth_id: 2, name: 'マフラータオル', kind: 'merch', price: 1800, description: null, is_active: true },
+    { id: 25, booth_id: 2, name: 'ホットドッグ', kind: 'food', price: 600, description: null, is_active: false },
+  ];
+  let nextMenuId = 30;
+  const level = (l: number) => ({ 1: '空いている', 2: 'やや混雑', 3: '混雑', 4: '非常に混雑' })[l] as string;
+  const stockLabel = (st: string) => ({ in_stock: '在庫あり', low: '残りわずか', sold_out: '売り切れ' })[st] as string;
 
   await page.addInitScript((user) => {
     if (!localStorage.getItem('courtq_token')) {
       localStorage.setItem('courtq_token', 'alice-token');
       localStorage.setItem('courtq_user', JSON.stringify(user));
     }
-  }, ALICE);
+  }, me);
 
   await page.route(`${API}/**`, async (route) => {
     const req = route.request();
@@ -114,7 +136,7 @@ export async function mockCourtqApi(page: Page, options: Options = {}): Promise<
 
     if (options.override && (await options.override(path, route))) return;
 
-    if (path === '/me') return route.fulfill({ json: { data: ALICE } });
+    if (path === '/me') return route.fulfill({ json: { data: me } });
     if (path === '/auth/logout') return route.fulfill({ json: { message: 'ログアウトしました' } });
     if (path === '/games') return route.fulfill({ json: { data: options.games ?? [TODAY_GAME, NEXT_GAME] } });
     if (path === '/games/1') return route.fulfill({ json: { data: TODAY_GAME } });
@@ -130,8 +152,23 @@ export async function mockCourtqApi(page: Page, options: Options = {}): Promise<
     }
     const detail = path.match(/^\/games\/\d+\/booths\/(\d+)$/);
     if (detail) {
-      const body = boothDetail(Number(detail[1]));
-      body.data.is_favorite = favorites.has(Number(detail[1]));
+      const id = Number(detail[1]);
+      const body = boothDetail(id);
+      body.data.is_favorite = favorites.has(id);
+      if (congestionOf[id]) body.data.congestion = congestionOf[id];
+      // スタッフが編集したメニュー（販売中のものだけ）と、更新した在庫を反映する
+      if (id === 2) {
+        body.data.menu_items = menu
+          .filter((m) => m.is_active)
+          .map((m) => ({
+            id: m.id,
+            name: m.name,
+            kind: m.kind,
+            price: m.price,
+            description: m.description,
+            stock: (m.id in stockOf ? stockOf[m.id] : (boothDetail(2).data.menu_items.find((x) => x.id === m.id)?.stock ?? null)) as never,
+          })) as never;
+      }
       return route.fulfill({ json: body });
     }
     if (/^\/games\/\d+\/booths\/\d+\/congestion-history$/.test(path)) return route.fulfill({ json: { data: HISTORY } });
@@ -148,6 +185,68 @@ export async function mockCourtqApi(page: Page, options: Options = {}): Promise<
       if (req.method() === 'PUT') favorites.add(id);
       if (req.method() === 'DELETE') favorites.delete(id);
       return route.fulfill({ json: { data: { booth_id: id, is_favorite: req.method() === 'PUT' } } });
+    }
+
+    // ===== スタッフ =====
+    if (path === '/staff/booths') {
+      if (me.role === 'user') return route.fulfill({ status: 403, json: { message: 'この操作は許可されていません' } });
+      const mine = booths().filter((b) => me.booths.some((x) => x.booth_id === b.booth_id));
+      const data = mine.map((b) => ({
+        booth_id: b.booth_id,
+        name: b.name,
+        category: b.category,
+        location_label: b.location_label,
+        upcoming_games: [
+          { game_id: 1, game_booth_id: b.game_booth_id, home_team: TODAY_GAME.home_team, away_team: TODAY_GAME.away_team, tipoff_at: TODAY_GAME.tipoff_at, status: 'live', is_open: b.is_open, congestion: congestionOf[b.booth_id] ?? b.congestion },
+        ],
+      }));
+      return route.fulfill({ json: { data } });
+    }
+    const cong = path.match(/^\/staff\/games\/(\d+)\/booths\/(\d+)\/congestion$/);
+    if (cong && req.method() === 'PUT') {
+      const body = req.postDataJSON() as { level: number; wait_minutes: number | null };
+      const id = Number(cong[2]);
+      const value = { level: body.level, label: level(body.level), wait_minutes: body.wait_minutes, updated_at: NOW_ISO, is_stale: false };
+      congestionOf[id] = value as never;
+      const b = booths().find((x) => x.booth_id === id);
+      return route.fulfill({ json: { data: { game_id: 1, booth_id: id, game_booth_id: b?.game_booth_id ?? 0, is_open: true, congestion: value } } });
+    }
+    const stock = path.match(/^\/staff\/games\/(\d+)\/menu-items\/(\d+)\/stock$/);
+    if (stock && req.method() === 'PUT') {
+      const body = req.postDataJSON() as { status: string; quantity: number | null };
+      const itemId = Number(stock[2]);
+      const value = { status: body.status, label: stockLabel(body.status), quantity: body.quantity, updated_at: NOW_ISO, is_stale: false };
+      stockOf[itemId] = value;
+      return route.fulfill({ json: { data: { game_id: 1, menu_item_id: itemId, stock: value } } });
+    }
+    const menuList = path.match(/^\/staff\/booths\/(\d+)\/menu-items$/);
+    if (menuList && req.method() === 'GET') return route.fulfill({ json: { data: menu } });
+    if (menuList && req.method() === 'POST') {
+      const body = req.postDataJSON() as { name: string; kind: string; price: number; description: string | null; is_active: boolean };
+      const created = { id: nextMenuId++, booth_id: Number(menuList[1]), ...body };
+      menu = [...menu, created];
+      return route.fulfill({ status: 201, json: { data: created } });
+    }
+    const menuOne = path.match(/^\/staff\/booths\/(\d+)\/menu-items\/(\d+)$/);
+    if (menuOne && req.method() === 'PUT') {
+      const id = Number(menuOne[2]);
+      menu = menu.map((m) => (m.id === id ? { ...m, ...(req.postDataJSON() as object) } : m));
+      return route.fulfill({ json: { data: menu.find((m) => m.id === id) } });
+    }
+    if (menuOne && req.method() === 'DELETE') {
+      const id = Number(menuOne[2]);
+      // 在庫の記録があるメニュー（21〜23）は削除できない
+      if ([21, 22, 23].includes(id)) {
+        return route.fulfill({ status: 422, json: { message: '在庫の記録があるメニューは削除できません。販売をやめるときは「販売中」をオフにしてください' } });
+      }
+      menu = menu.filter((m) => m.id !== id);
+      return route.fulfill({ json: { message: 'メニューを削除しました' } });
+    }
+    if (path === '/staff/invitations/accept' && req.method() === 'POST') {
+      const code = String((req.postDataJSON() as { code: string }).code).toUpperCase().replace(/[\s-]/g, '');
+      if (code !== VALID_CODE) return route.fulfill({ status: 422, json: { message: '招待コードが正しくないか、有効期限が切れています' } });
+      me = { ...ALICE, role: 'staff', booths: [{ booth_id: 5, name: 'ウィングス・グッズ東' }] };
+      return route.fulfill({ json: { data: { user: me, booth: { booth_id: 5, name: 'ウィングス・グッズ東' } } } });
     }
 
     return route.fulfill({ status: 404, json: { message: '見つかりません' } });

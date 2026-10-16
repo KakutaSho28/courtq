@@ -213,6 +213,19 @@ class StaffApiTest extends TestCase
         $this->assertDatabaseMissing('menu_items', ['id' => $id]);
     }
 
+    public function test_menu_item_list_includes_inactive_items(): void
+    {
+        MenuItem::factory()->create(['booth_id' => $this->booth->id, 'name' => '販売中']);
+        MenuItem::factory()->inactive()->create(['booth_id' => $this->booth->id, 'name' => '販売終了']);
+        MenuItem::factory()->create(); // 別のブース
+        Sanctum::actingAs($this->staff);
+
+        $response = $this->getJson("/api/staff/booths/{$this->booth->id}/menu-items")->assertOk()->assertJsonCount(2, 'data');
+
+        $this->assertEqualsCanonicalizing(['販売中', '販売終了'], $response->json('data.*.name'));
+        $this->assertContains(false, $response->json('data.*.is_active'));
+    }
+
     public function test_menu_item_validation(): void
     {
         Sanctum::actingAs($this->staff);

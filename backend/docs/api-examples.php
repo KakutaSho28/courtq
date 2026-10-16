@@ -203,6 +203,17 @@ TXT,
             429 => $tooMany,
         ],
     ],
+    'GET /api/staff/booths/{booth}/menu-items' => [
+        'group' => 'スタッフ',
+        'summary' => 'メニューの一覧（STAFF-04）',
+        'description' => '担当ブースのメニューを、販売終了（`is_active: false`）のものも含めて返す（来場者向けのブース詳細は販売中だけ。スタッフが販売を再開できるように）。`kind`、`id` の順。',
+        'responses' => [
+            200 => ['description' => 'メニューの一覧', 'example' => ['data' => [['id' => 1, 'booth_id' => 1, 'name' => 'から揚げ 5 個', 'kind' => 'food', 'price' => 700, 'description' => null, 'is_active' => true]]]],
+            401 => $unauthenticated,
+            403 => $forbidden,
+            404 => $notFound,
+        ],
+    ],
     'POST /api/staff/booths/{booth}/menu-items' => [
         'group' => 'スタッフ',
         'summary' => 'メニューの追加（STAFF-04）',

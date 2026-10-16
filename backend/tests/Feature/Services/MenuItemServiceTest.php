@@ -87,4 +87,16 @@ class MenuItemServiceTest extends TestCase
             $this->assertFalse($booths->listForGame($game)[0]['has_stock'], '販売終了にしたら在庫ありの扱いから外れる');
         }
     }
+
+    public function test_list_includes_inactive_items_but_only_of_that_booth(): void
+    {
+        $booth = Booth::factory()->create();
+        $active = MenuItem::factory()->create(['booth_id' => $booth->id, 'name' => '販売中']);
+        $inactive = MenuItem::factory()->inactive()->create(['booth_id' => $booth->id, 'name' => '販売終了']);
+        MenuItem::factory()->create(); // 別のブース
+
+        $items = app(MenuItemService::class)->list($booth);
+
+        $this->assertEqualsCanonicalizing([$active->id, $inactive->id], $items->pluck('id')->all());
+    }
 }

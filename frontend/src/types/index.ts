@@ -108,3 +108,51 @@ export type FavoriteBooth = {
   category: BoothCategory;
   location_label: string;
 };
+
+/** スタッフ画面: 管理できるブースと、今日以降の出店予定（STAFF-01） */
+export type StaffBoothGame = {
+  game_id: number;
+  game_booth_id: number;
+  home_team: string;
+  away_team: string;
+  tipoff_at: string;
+  status: GameStatus;
+  is_open: boolean;
+  congestion: Congestion;
+};
+
+export type StaffBooth = {
+  booth_id: number;
+  name: string;
+  category: BoothCategory;
+  location_label: string;
+  upcoming_games: StaffBoothGame[];
+};
+
+/** メニュー（STAFF-04。販売終了のものも含む） */
+export type StaffMenuItem = {
+  id: number;
+  booth_id: number;
+  name: string;
+  kind: MenuItemKind;
+  price: number;
+  description: string | null;
+  is_active: boolean;
+};
+
+export type MenuItemInput = {
+  name: string;
+  kind: MenuItemKind;
+  price: number;
+  description: string | null;
+  is_active: boolean;
+};
+
+/** 混雑の更新結果（STAFF-02） */
+export type CongestionUpdateResult = { game_id: number; booth_id: number; game_booth_id: number; is_open: boolean; congestion: Congestion };
+
+/** 在庫の更新結果（STAFF-03） */
+export type StockUpdateResult = { game_id: number; menu_item_id: number; stock: Stock };
+
+/** 招待コードを使った結果（STAFF-05） */
+export type InvitationAccepted = { user: AuthUser; booth: { booth_id: number; name: string } };

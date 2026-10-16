@@ -9,6 +9,7 @@ use App\Models\Booth;
 use App\Models\MenuItem;
 use App\Services\MenuItemService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
  * STAFF-04 メニューの管理。認可はルートで済ませている: role:staff,admin → can:manage,booth（BoothPolicy）。
@@ -17,6 +18,12 @@ use Illuminate\Http\JsonResponse;
 class StaffMenuItemController extends Controller
 {
     public function __construct(private readonly MenuItemService $menu) {}
+
+    /** 一覧（販売終了のメニューも含む） */
+    public function index(Booth $booth): AnonymousResourceCollection
+    {
+        return MenuItemResource::collection($this->menu->list($booth));
+    }
 
     public function store(StoreMenuItemRequest $request, Booth $booth): JsonResponse
     {

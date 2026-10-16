@@ -362,6 +362,118 @@ body {
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .empty .btn { margin-top: 8px; text-decoration: none; }
 
+/* ============================================
+   WP-B6 スタッフの画面（会場で片手・急いで操作する。ボタンは大きく、押した結果がすぐ分かるように）
+   ============================================ */
+.big-btn { min-height: 56px; font-size: 17px; }
+a.btn { text-decoration: none; }
+.panel-title { margin: 0 0 4px; font-size: 14px; color: var(--text-dim); }
+.update-form { margin-top: 8px; }
+.field-title { font-size: 15px; font-weight: 700; margin: 18px 0 8px; }
+.field-label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+.save-note { margin: 4px 0 0; font-weight: 700; color: #14532d; }
+.staff-invite-link { margin-top: 28px; text-align: center; }
+
+/* 混雑レベルの選択（2 × 2）。色 + 文言 + 選択中の ✓ */
+.level-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.level-btn {
+  position: relative;
+  min-height: 72px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  border: 3px solid var(--navy);
+  background: var(--bg-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.level-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.level-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.level-1 { border-color: var(--status-1-bg); }
+.level-2 { border-color: var(--status-2-line); }
+.level-3 { border-color: var(--status-3-bg); }
+.level-4 { border-color: var(--status-4-bg); }
+.level-1[aria-pressed='true'] { background: var(--status-1-bg); color: var(--status-1-fg); }
+.level-2[aria-pressed='true'] { background: var(--status-2-bg); color: var(--status-2-fg); }
+.level-3[aria-pressed='true'] { background: var(--status-3-bg); color: var(--status-3-fg); }
+.level-4[aria-pressed='true'] { background: var(--status-4-bg); color: var(--status-4-fg); }
+.level-check { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 22px; }
+
+/* 待ち時間のステッパー */
+.stepper { display: grid; grid-template-columns: 64px 1fr 64px; gap: 10px; align-items: center; }
+.stepper-btn {
+  min-height: 64px;
+  border-radius: 14px;
+  border: 2px solid var(--navy);
+  background: var(--bg-card);
+  color: var(--navy);
+  font-size: 30px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.stepper-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.stepper-value { text-align: center; font-size: 22px; }
+.stepper-value strong { font-size: 34px; }
+.stepper-clear { grid-column: 1 / -1; justify-self: center; }
+.send-btn { margin-top: 18px; }
+
+/* 在庫の切り替え */
+.stock-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.stock-row { display: grid; gap: 8px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); }
+.stock-row-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.stock-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stock-btn {
+  min-height: 56px;
+  padding: 6px 4px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--bg-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.stock-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.stock-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.stock-btn[aria-pressed='true'] { color: #fff; border-color: transparent; }
+.stock-btn-in_stock[aria-pressed='true'] { background: #14532d; }
+.stock-btn-low[aria-pressed='true'] { background: #7a4b00; }
+.stock-btn-sold_out[aria-pressed='true'] { background: #4b5563; }
+.stock-qty-field { margin: 0; }
+.stock-qty-field input { max-width: 160px; }
+.stock-qty-field label { font-size: 12px; }
+
+/* 失敗の表示 */
+.write-error { align-items: flex-start; flex-wrap: wrap; }
+.write-error-note { font-weight: 700; }
+.write-error-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+
+/* S07 担当ブース */
+.staff-booth { display: grid; gap: 12px; padding: 16px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); }
+.staff-booth-head { display: grid; gap: 2px; }
+.staff-booth-head h2 { margin: 0; }
+.staff-game { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.staff-game.is-today { border: 2px solid var(--navy); }
+.staff-game-info { display: grid; gap: 4px; }
+.staff-game-title { font-weight: 700; }
+.staff-game-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+
+/* S09 メニュー管理 / S10 招待コード */
+.menu-form { display: grid; gap: 4px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); }
+.menu-form-actions { display: grid; gap: 8px; }
+.menu-manage { display: grid; gap: 8px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); }
+.menu-manage.is-inactive { background: #eef0f4; }
+.menu-manage-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.menu-manage-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.menu-manage-actions .btn:first-child { grid-column: 1 / -1; }
+.confirm-delete { flex-wrap: wrap; }
+.invite-form { display: grid; gap: 8px; }
+.invite-input { text-align: center; font-size: 26px; letter-spacing: 0.12em; font-weight: 700; padding: 14px 12px; }
+
 @media (max-width: 600px) {
   .app-header { flex-wrap: wrap; gap: 6px; }
   .app-nav { gap: 8px; }
