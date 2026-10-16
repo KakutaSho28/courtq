@@ -15,6 +15,8 @@ return [
     'boolean' => ':attribute は true / false で指定してください',
     'integer' => ':attribute は整数で入力してください',
     'date' => ':attribute は正しい日付で入力してください',
+    'date_format' => ':attribute は :format の形式で入力してください',
+    'enum' => '選択された:attribute は正しくありません',
     'array' => ':attribute は配列で指定してください',
     'file' => ':attribute はファイルを指定してください',
     'max' => [
@@ -38,5 +40,11 @@ return [
         'name' => '名前',
         'email' => 'メールアドレス',
         'password' => 'パスワード',
+        'date' => '日付',
+        'from' => '開始日',
+        'category' => 'カテゴリ',
+        'sort' => '並び順',
+        'in_stock' => '在庫あり',
+        'favorites' => 'お気に入り',
     ],
 ];
