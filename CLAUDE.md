@@ -33,7 +33,10 @@ frontend/src/
   api/courtq.ts          画面から呼ぶ API の関数と型（URL はここに集める）
   lib/time.ts            「○分前」・鮮度（isStale）・日本時間の日付表示
   hooks/useApiResource.ts 読み込み中 / エラー / オフラインの状態を返す共通の読み込み（online・画面復帰で取り直す）
-  pages/                 S01 Login / S02 Register / S03 Games / S04 BoothList / S05 BoothDetail / S06 Favorites
+  hooks/useWriteAction.ts 書き込みの共通窓口（オフラインなら送らない・失敗は error に出す・二重送信を防ぐ・403 なら権限を取り直す）
+  lib/role.ts            canUseStaffScreens（画面の出し分け用。本当の防御はサーバー側）
+  pages/                 S01 Login / S02 Register / S03 Games / S04 BoothList / S05 BoothDetail / S06 Favorites /
+                         S07 StaffBooths / S08 StaffUpdate / S09 StaffMenu / S10 Invite（S07〜S09 は RequireStaff の中）
   store/auth.ts          Zustand 認証ストア
   lib/echo.ts            Echo シングルトン（公開チャンネルのみ）
   components/, hooks/, pages/, types/
@@ -75,6 +78,8 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 - ブランド色は紺 `#14213D` / オレンジ `#FF7A1A`。**混雑の状態色（緑・黄・橙・赤）はブランドのオレンジと別の色**を使い、必ず文言（空いている / やや混雑 / 混雑 / 非常に混雑）と一緒に表示する（色だけで伝えない）。
   - 状態色は `frontend/src/styles.css` の `--status-1〜4`（1 `#15803D` / 2 `#F5C400` / 3 `#C2410C` / 4 `#7F1D1D`）。色を変えるときは、文字とのコントラスト（4.5 以上）と、隣り合う段階・ブランドのオレンジとの色の差を数値で確かめる（値と根拠は styles.css のコメント）。
   - 混雑は `CongestionBadge`（色 + 4 段階のメーター + 文言）、最終更新は `Freshness`（「最終更新 ○分前」と「情報が古い可能性があります」）を使う。鮮度は画面側で `updated_at` と `meta.stale_after_minutes` から計算する（オフラインで古いキャッシュを見ているときも正しく出すため）。
+- スタッフの画面の書き込みは `useWriteAction` を使い、**成功したふりをしない**: オフラインなら送らずに理由を出す。サーバーの応答を待ってから反映する（在庫のように押した瞬間に表示を変えるものは、失敗したら必ず元に戻す）。失敗したら入力を残して再試行できるようにし、更新した時刻はサーバーの応答の値を出す。
+- 画面の出し分け（`RequireStaff` など）は見た目のためだけで、権限の判定には使わない。必ずサーバー側（`role` ミドルウェアと Policy）で守る。
 - **B.LEAGUE の名称・チームロゴ・公式ブランドを UI・デモデータに使わない。** デモのチーム・会場・ブースはすべて架空にする。
 - スコープ外のものは作らない（画像アップロード、外部の日程サイトのスクレイピング／自動同期など）。
 
