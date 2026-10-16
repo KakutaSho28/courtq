@@ -1,10 +1,11 @@
 #!/bin/bash
 # =========================================================
 # 本番/ローカル API スモークテスト
-# health(DB) → 登録 → ログイン → /me → 試合・ブース・お気に入りの閲覧 → ログアウト → 失効したトークンは 401
+# health(DB) → 登録 → ログイン → /me → 試合・ブース・お気に入りの閲覧 → 一般ユーザーの書き込みは 403 → ログアウト → 失効したトークンは 401
 # 使い方: bash scripts/smoke-test.sh https://<railway-domain>/api [https://<vercel-domain>]
 # 第2引数（任意）を渡すと、CORS プリフライトとフロントのSPAルーティングも確認する。
-# 試合が 1 件も無い環境（デモデータ未投入）では、ブースの確認を飛ばす。書き込み API の確認は WP-B4 で追加する。
+# 試合が 1 件も無い環境（デモデータ未投入）では、ブースの確認を飛ばす。
+# 書き込み API は「登録したばかりの一般ユーザーが自分のトークンで直接叩くと 403」だけを確認する（本番のデータを変えないため）。
 # =========================================================
 set -euo pipefail
 
@@ -38,6 +39,16 @@ AUTH=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H '
 
 out=$(req "$API/me" "${AUTH[@]}");                                          check "me" 200 "$out"
 [ "$(body "$out" | json "['data']['email']")" = "$EMAIL" ] && echo "✓ me returns the registered user"
+[ "$(body "$out" | json "['data']['role']")" = "user" ] && echo "✓ a registered user has the user role"
+
+# 一般ユーザーのトークンで書き込み API を直接呼ぶ → すべて 403（存在しない ID でも 403。役割の確認が ID の確認より先）
+for spec in "PUT /staff/games/1/booths/1/congestion {\"level\":1}" "PUT /staff/games/1/menu-items/1/stock {\"status\":\"in_stock\"}" \
+            "POST /staff/booths/1/menu-items {}" "PUT /staff/booths/1/menu-items/1 {}" "DELETE /staff/booths/1/menu-items/1 {}" \
+            "GET /staff/booths {}" "POST /admin/booths/1/invitations {}" "GET /admin/booths/1/staff {}" "DELETE /admin/booths/1/staff/1 {}"; do
+  read -r method path payload <<< "$spec"
+  if [ "$method" = "GET" ]; then out=$(req "$API$path" "${AUTH[@]}"); else out=$(req -X "$method" "$API$path" "${AUTH[@]}" -d "$payload"); fi
+  check "user is forbidden: $method $path" 403 "$out"
+done
 
 out=$(req "$API/me" -H 'Accept: application/json');                         check "protected route rejects anonymous" 401 "$out"
 out=$(req "$API/games" -H 'Accept: application/json');                      check "games require login" 401 "$out"
