@@ -28,7 +28,7 @@ class AuthFlowTest extends TestCase
         $this->withToken($token)
             ->getJson('/api/me')
             ->assertOk()
-            ->assertExactJson(['data' => ['id' => 1, 'name' => 'テストユーザー', 'email' => 'test@example.com', 'role' => 'user', 'booths' => []]]);
+            ->assertExactJson(['data' => ['id' => User::where('email', 'test@example.com')->value('id'), 'name' => 'テストユーザー', 'email' => 'test@example.com', 'role' => 'user', 'booths' => []]]); // 自動採番の値は DB（MySQL）によって決め打ちできない
 
         $this->withToken($token)->postJson('/api/auth/logout')->assertOk();
         $this->assertSame(0, User::first()->tokens()->count());
@@ -76,6 +76,14 @@ class AuthFlowTest extends TestCase
 
     public function test_json_keeps_japanese_unescaped_to_keep_payloads_small(): void
     {
+        // 存在しない URL（ルートに一致しないので api ミドルウェアを通らない）の 404 も、日本語のまま返る
+        $notFound = $this->getJson('/api/nothing-here')->assertNotFound();
+        $this->assertStringContainsString('見つかりません', $notFound->getContent());
+        $this->assertStringNotContainsString('\\u', $notFound->getContent());
+        // 入力不正（422）・レート制限（429）も同じ
+        $invalid = $this->postJson('/api/auth/login', [])->assertUnprocessable();
+        $this->assertStringNotContainsString('\\u', $invalid->getContent());
+
         // エラー（Handler 経由）と成功のどちらも、\uXXXX ではなく日本語のまま返る
         $error = $this->getJson('/api/me')->assertUnauthorized();
         $this->assertStringContainsString('ログインが必要です', $error->getContent());

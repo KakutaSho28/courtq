@@ -12,10 +12,12 @@ RUN composer install --no-dev --no-interaction --no-progress --no-scripts \
 # ---- 実行イメージ ----
 FROM php:8.2-fpm
 
+# php:8.2-fpm には mbstring・opcache・ctype・tokenizer など Laravel に必要な拡張が入っている（`php -m` で確認済み）。
+# 足すのは MySQL 用の pdo_mysql と、queue:work のタイムアウトに必要な pcntl、bcmath だけ。
+# 画像アップロードや zip は使わないので、gd / exif / zip と、そのための -dev パッケージは入れない（ビルドが速く、失敗しにくい）
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx supervisor gettext-base \
-        libpng-dev libonig-dev libxml2-dev libzip-dev \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip opcache \
+    && docker-php-ext-install pdo_mysql pcntl bcmath \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY docker/php.ini /usr/local/etc/php/conf.d/zz-courtq.ini
