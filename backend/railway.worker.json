@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "php artisan queue:work --tries=3 --timeout=60 --sleep=1",
+    "startCommand": "sh -c 'php artisan app:deploy-check --worker --wait-db=60 && exec php artisan queue:work --tries=3 --timeout=60 --sleep=1'",
     "restartPolicyType": "ALWAYS"
   }
 }
