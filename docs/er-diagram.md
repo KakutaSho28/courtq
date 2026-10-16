@@ -127,9 +127,9 @@ erDiagram
 | `favorites` | (`user_id`, `booth_id`) |
 | `staff_invitations` | `code` |
 | `games` | (`season`, `section`, `home_team`, `away_team`)。CSV の再インポートで同じ試合を重複登録しないため |
+| `users` | `email`、(`provider`, `provider_user_id`) |
 
 > 注意: MySQL の一意制約は NULL を「互いに異なる値」として扱うため、`section` が NULL の試合は上の制約では重複を防げない。CSV 取り込み（WP-B7）ではアプリ側でも重複を確認する。
-| `users` | `email`、(`provider`, `provider_user_id`) |
 
 ## 削除時の扱い
 
