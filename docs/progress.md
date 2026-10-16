@@ -7,8 +7,8 @@
 
 | WP | 状態 | ブランチ / PR |
 |---|---|---|
-| WP-B0 計画 | ✅ 計画書を作成。**ユーザーの OK 待ち** | `feature/wp-b0-plan` |
-| WP-B1 基盤 | ⬜ 未着手（B0 の OK 後） | — |
+| WP-B0 計画 | ✅ 完了（2026-10-16 にユーザーが承認） | `feature/wp-b0-plan` → `main` |
+| WP-B1 基盤 | 🔄 着手 | `feature/wp-b1-bootstrap` → `develop` |
 | WP-B2〜B10 | ⬜ 未着手 | — |
 
 ## 完了
@@ -21,8 +21,7 @@
 
 ## 次にやること
 
-1. ユーザーから B0 の OK と、`wp-b0-plan.md` 6 章の質問への回答をもらう。
-2. WP-B1: `main` から `develop` を作成 → `feature/wp-b1-bootstrap` で計画書 4 章の C / A / N を実施 → test / route:list / docs:api / build / e2e を実行 → `develop` 向け PR。
+1. WP-B1: `main` から `develop` を作成 → `feature/wp-b1-bootstrap` で計画書 4 章の C / A / N を実施 → test / route:list / docs:api / build / e2e を実行 → `develop` 向け PR。
 
 ## 決定事項
 
@@ -30,12 +29,15 @@
 - 作業指示が「Spovie にある」と想定していたが実際には無いもの（日本語の 401/404/429、`/me`、日本語バリデーション、ログインの throttle、`constants.ts`）は B1 で新規作成する。
 - リアルタイムは公開チャンネル `game.{gameId}` のみ。`/api/broadcasting/auth` は作らない（Spovie の private チャンネル用の認証処理は削除）。
 
-## 未解決の質問（ユーザーに確認中）
+### WP-B0 で承認された提案（`wp-b0-plan.md` 6 章、2026-10-16 承認）
 
-`wp-b0-plan.md` の 6 章を参照:
+1. B0 の PR は `main` 向け。B1 の最初に `develop` を作り、B1 以降の PR は `develop` 向け。
+2. 招待コードは紛らわしい文字（0/O・1/I/L）を除いた英数字 8 文字（表示は `K7Q2-MX9P` のように 4 文字ずつ区切る）。受付 API（STAFF-05）にも `throttle` を付ける。
+3. Echo（リアルタイム接続）はログイン中だけ接続する。
+   - **注意: 将来、未ログインでも混雑状況を見られるようにする場合は、Echo をログインなしで接続するように変更する必要がある**（`frontend/src/lib/echo.ts` の `getEcho()` がトークン未設定なら null を返す部分と、ログアウト時に切断する処理）。
+4. `/me` は B1 で id / name / email、B2 で `role`、B4 で担当ブースを追加する。
+5. `doctrine/dbal` は外す（既存カラムの型変更が必要になったら戻す）。
 
-1. B0 の PR を `main` 向けにし、B1 の最初に `develop` を作る案でよいか
-2. 招待コードを「紛らわしい文字を除いた英数字 8 文字」にしてよいか
-3. Echo の接続はログイン中だけでよいか
-4. `/me` を B1 で最小限 → B2・B4 で項目を追加する進め方でよいか
-5. `doctrine/dbal` を外してよいか
+## 未解決の質問
+
+なし
