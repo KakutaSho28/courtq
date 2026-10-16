@@ -2,6 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Enums\CongestionLevel;
+use App\Enums\StockStatus;
+use App\Models\Booth;
+use App\Models\CongestionLog;
+use App\Models\Game;
+use App\Models\GameBooth;
+use App\Models\ItemStock;
+use App\Models\MenuItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -96,5 +104,50 @@ class ApiContractTest extends TestCase
         }
 
         $this->assertDocumented('POST /api/auth/login', $this->postJson('/api/auth/login', ['email' => 'a@example.com', 'password' => 'wrong-password'])->assertStatus(429));
+    }
+
+    /** 閲覧系 API（試合・ブース・お気に入り）の 200 / 401 / 404 / 422 が、api-examples.php の例と同じ構造 */
+    public function test_read_endpoints_match_documented_examples(): void
+    {
+        $user = User::factory()->create();
+        $game = Game::factory()->today()->create();
+        $booth = Booth::factory()->create();
+        $gameBooth = GameBooth::factory()->for($game)->for($booth)->withCongestion(CongestionLevel::Crowded, 25)->create();
+        $item = MenuItem::factory()->create(['booth_id' => $booth->id, 'description' => '説明']);
+        ItemStock::factory()->for($game)->for($item, 'menuItem')->status(StockStatus::Low, 4)->create();
+        (new CongestionLog)->forceFill(['game_booth_id' => $gameBooth->id, 'level' => 3, 'wait_minutes' => 25, 'user_id' => $user->id, 'created_at' => now()])->save();
+        $this->actingAs($user, 'sanctum');
+        $base = "/api/games/{$game->id}";
+
+        $this->assertDocumented('GET /api/games', $this->getJson('/api/games')->assertOk());
+        $this->assertDocumented('GET /api/games', $this->getJson('/api/games?date=bad')->assertUnprocessable());
+        $this->assertDocumented('GET /api/games/{game}', $this->getJson($base)->assertOk());
+        $this->assertDocumented('GET /api/games/{game}', $this->getJson('/api/games/999999')->assertNotFound());
+
+        $this->assertDocumented('GET /api/games/{game}/booths', $this->getJson("{$base}/booths")->assertOk());
+        $this->assertDocumented('GET /api/games/{game}/booths', $this->getJson("{$base}/booths?sort=bad")->assertUnprocessable());
+        $this->assertDocumented('GET /api/games/{game}/booths', $this->getJson('/api/games/999999/booths')->assertNotFound());
+        $this->assertDocumented('GET /api/games/{game}/booths/{booth}', $this->getJson("{$base}/booths/{$booth->id}")->assertOk());
+        $this->assertDocumented('GET /api/games/{game}/booths/{booth}', $this->getJson("{$base}/booths/".Booth::factory()->create()->id)->assertNotFound());
+        $this->assertDocumented('GET /api/games/{game}/booths/{booth}/congestion-history', $this->getJson("{$base}/booths/{$booth->id}/congestion-history")->assertOk());
+        $this->assertDocumented('GET /api/games/{game}/booths/{booth}/congestion-history', $this->getJson("{$base}/booths/999999/congestion-history")->assertNotFound());
+
+        $this->assertDocumented('PUT /api/booths/{booth}/favorite', $this->putJson("/api/booths/{$booth->id}/favorite")->assertOk());
+        $this->assertDocumented('PUT /api/booths/{booth}/favorite', $this->putJson('/api/booths/999999/favorite')->assertNotFound());
+        $this->assertDocumented('GET /api/me/favorites', $this->getJson('/api/me/favorites')->assertOk());
+        $this->assertDocumented('DELETE /api/booths/{booth}/favorite', $this->deleteJson("/api/booths/{$booth->id}/favorite")->assertOk());
+        $this->assertDocumented('DELETE /api/booths/{booth}/favorite', $this->deleteJson('/api/booths/999999/favorite')->assertNotFound());
+    }
+
+    public function test_read_endpoints_document_the_unauthenticated_response(): void
+    {
+        $this->assertDocumented('GET /api/games', $this->getJson('/api/games')->assertUnauthorized());
+        $this->assertDocumented('GET /api/games/{game}', $this->getJson('/api/games/1')->assertUnauthorized());
+        $this->assertDocumented('GET /api/games/{game}/booths', $this->getJson('/api/games/1/booths')->assertUnauthorized());
+        $this->assertDocumented('GET /api/games/{game}/booths/{booth}', $this->getJson('/api/games/1/booths/1')->assertUnauthorized());
+        $this->assertDocumented('GET /api/games/{game}/booths/{booth}/congestion-history', $this->getJson('/api/games/1/booths/1/congestion-history')->assertUnauthorized());
+        $this->assertDocumented('GET /api/me/favorites', $this->getJson('/api/me/favorites')->assertUnauthorized());
+        $this->assertDocumented('PUT /api/booths/{booth}/favorite', $this->putJson('/api/booths/1/favorite')->assertUnauthorized());
+        $this->assertDocumented('DELETE /api/booths/{booth}/favorite', $this->deleteJson('/api/booths/1/favorite')->assertUnauthorized());
     }
 }

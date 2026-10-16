@@ -9,8 +9,9 @@
 |---|---|---|
 | WP-B0 計画 | ✅ 完了（2026-10-16 にユーザーが承認） | [#4](https://github.com/KakutaSho28/courtq/pull/4)（`develop` 向け） |
 | WP-B1 基盤 | ✅ 完了（別の作業で実装済み。2026-10-16 に検証して完了扱いにした） | [#1](https://github.com/KakutaSho28/courtq/pull/1)・[#2（Laravel 12）](https://github.com/KakutaSho28/courtq/pull/2)、`develop` にマージ済み |
-| WP-B2 データモデル | 🔄 レビュー・検証済み、マージ待ち | [#3](https://github.com/KakutaSho28/courtq/pull/3)（`develop` 向け） |
-| WP-B3〜B10 | ⬜ 未着手 | — |
+| WP-B2 データモデル | ✅ 完了（`develop` にマージ済み） | [#3](https://github.com/KakutaSho28/courtq/pull/3) |
+| WP-B3 読み取り API | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | [#5](https://github.com/KakutaSho28/courtq/pull/5)（`feature/wp-b3-read-api` → `develop`） |
+| WP-B4〜B10 | ⬜ 未着手 | — |
 
 ## 完了
 
@@ -22,8 +23,8 @@
 
 ## 次にやること
 
-1. #3（WP-B2）と #4（B0 の文書）をユーザーがマージする。
-2. WP-B3（読み取り API: GAME / BOOTH / FAV とキャッシュ）。service-first で、まず Service とテストから。
+1. WP-B3 の PR をユーザーがマージする。
+2. WP-B4: ロール（`EnsureRole`）・Policy・STAFF API・招待コード・履歴・throttle。「一般ユーザーが書き込み API を直接叩くと 403」を全書き込み API でテストする。B3 で用意した `BoothService::forgetList()` を、混雑・在庫の更新から呼ぶ。`/me` に `role` と担当ブースを追加する。招待コードは紛らわしい文字を除いた 8 文字。
 
 ### WP-B1 の検証（`develop` @ `7982918`、2026-10-16）
 
@@ -83,6 +84,40 @@ e2e の注記: このセッションの Playwright（1.4x）は `/opt/pw-browser
 - B1 は別の作業で完了済みなので、再実装せず検証のみ行った（2026-10-16）。
 - コミットメッセージに AI の共同作成者表記は入れない（CLAUDE.md の規約）。
 - リアルタイムは公開チャンネル `game.{gameId}` のみ。`/api/broadcasting/auth` は作らない（Spovie の private チャンネル用の認証処理は削除）。
+
+### WP-B3（2026-10-16）
+
+読み取り API を service-first（Service とテスト → Controller / Route / Resource）で追加した。
+
+| ID | API | 要点 |
+|---|---|---|
+| GAME-01 | `GET /games?date=&from=` | 今日の試合が先頭、あとは開始時刻順。省略時は今日以降。最大 100 件 |
+| GAME-02 | `GET /games/{game}` | |
+| BOOTH-01 | `GET /games/{game}/booths?category=&sort=&in_stock=&favorites=` | 軽い応答。共通部分を 20 秒キャッシュ（`COURTQ_LIST_CACHE_SECONDS`）。`forgetList()` で破棄 |
+| BOOTH-02 | `GET /games/{game}/booths/{booth}` | 販売中のメニュー + その試合の在庫 + 最終更新。出店していないブースは 404 |
+| BOOTH-03 | `GET /games/{game}/booths/{booth}/congestion-history` | 古い順で直近 200 件。更新者は返さない |
+| FAV-01〜03 | `GET /me/favorites`、`PUT` / `DELETE /booths/{booth}/favorite` | PUT / DELETE は冪等。自分の分だけ |
+
+実行したもの（このセッション）:
+
+| 確認 | 結果 |
+|---|---|
+| `php artisan test` | ✅ 103 件成功（B2 までの 48 件 → 追加 55 件。Service 27 / API 3 ファイル / 契約テスト / 日本語 JSON） |
+| `php artisan route:list` | ✅ 13 ルート。競合なし、クロージャなし（`DeploymentConfigTest`） |
+| `php artisan docs:api` | ✅ 再生成してコミット（`ApiDocsTest` / `ApiContractTest` 成功） |
+| `npm run build` | ✅ フロントは未変更だが規約どおり実行 |
+| スモークテスト（`php artisan serve` + sqlite） | ✅ デモデータ入りと空の DB の両方で成功（閲覧系 + お気に入りを追加） |
+| 実データでの目視（デモ Seeder → API） | ✅ 並び順・鮮度（20 分前の更新が `is_stale: true`）・閉店中は最後・日本語の 422 |
+| MySQL 8 での実行 / Docker | **not verified**（MySQL / Docker が無い。CASE 式の並び替えと `join` は標準 SQL で書いたが、MySQL 上では未実行） |
+
+決めたこと:
+
+- **キャッシュするのは全員共通の部分だけ**（ブース・混雑・在庫の有無）。お気に入りの印と絞り込みはキャッシュの外で付ける（ユーザーごとに違うため。テストで「alice のお気に入りが bob に漏れない」を確認）。キャッシュは 1 試合 1 キー（`database` ドライバはタグ非対応）。
+- **`is_stale` はキャッシュに入れず、応答のたびに計算**する（時間とともに変わるため）。しきい値は `config('courtq.stale_after_minutes')` の 1 か所。`meta.stale_after_minutes` も返す（オフラインの PWA が画面側で計算し直せるように）。一度も更新されていないブースは `level` などが null で `is_stale` は false。
+- `category=food` / `merch` は兼営（`both`）のブースも含む。`in_stock=1` は「販売中のメニューに、売り切れでない在庫が 1 つ以上ある」ブース。
+- 名前順は文字コード順（五十音順ではない）。ブース数が少ないので許容。必要になったら B5 で見直す。
+- **API の JSON は日本語をエスケープしない**（`UnescapedJsonResponse`）。エスケープすると日本語が 1 文字 3 バイト → 6 バイトになり、会場の弱い回線で読む一覧が約 2 倍になるため。作業指示 1 章 10 の「軽いペイロード」のための追加。
+- 履歴の `created_at` は `$fillable` に入れていない。B4 の更新処理は `now()` で記録する（テストでは `forceFill` で時刻を指定）。
 
 ### WP-B0 で承認された提案（`wp-b0-plan.md` 6 章、2026-10-16 承認）
 

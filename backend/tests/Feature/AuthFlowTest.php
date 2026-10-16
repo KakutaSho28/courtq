@@ -73,4 +73,16 @@ class AuthFlowTest extends TestCase
             ->assertStatus(429)
             ->assertJsonPath('message', 'リクエストが多すぎます。しばらくしてからもう一度お試しください');
     }
+
+    public function test_json_keeps_japanese_unescaped_to_keep_payloads_small(): void
+    {
+        // エラー（Handler 経由）と成功のどちらも、\uXXXX ではなく日本語のまま返る
+        $error = $this->getJson('/api/me')->assertUnauthorized();
+        $this->assertStringContainsString('ログインが必要です', $error->getContent());
+        $this->assertStringNotContainsString('\\u', $error->getContent());
+
+        $this->postJson('/api/auth/register', ['name' => 'アリス', 'email' => 'alice@example.com', 'password' => 'password123', 'password_confirmation' => 'password123'])
+            ->assertCreated()
+            ->assertSee('アリス', false);
+    }
 }

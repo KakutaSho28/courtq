@@ -1,10 +1,10 @@
 #!/bin/bash
 # =========================================================
 # 本番/ローカル API スモークテスト
-# health(DB) → 登録 → ログイン → /me → ログアウト → 失効したトークンは 401
+# health(DB) → 登録 → ログイン → /me → 試合・ブース・お気に入りの閲覧 → ログアウト → 失効したトークンは 401
 # 使い方: bash scripts/smoke-test.sh https://<railway-domain>/api [https://<vercel-domain>]
 # 第2引数（任意）を渡すと、CORS プリフライトとフロントのSPAルーティングも確認する。
-# 試合・ブース・書き込み API の確認は、対応する WP で追加する。
+# 試合が 1 件も無い環境（デモデータ未投入）では、ブースの確認を飛ばす。書き込み API の確認は WP-B4 で追加する。
 # =========================================================
 set -euo pipefail
 
@@ -40,6 +40,27 @@ out=$(req "$API/me" "${AUTH[@]}");                                          chec
 [ "$(body "$out" | json "['data']['email']")" = "$EMAIL" ] && echo "✓ me returns the registered user"
 
 out=$(req "$API/me" -H 'Accept: application/json');                         check "protected route rejects anonymous" 401 "$out"
+out=$(req "$API/games" -H 'Accept: application/json');                      check "games require login" 401 "$out"
+
+out=$(req "$API/games" "${AUTH[@]}");                                       check "games list" 200 "$out"
+GAME_ID=$(printf '%s' "$(body "$out")" | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['id'] if d else '')")
+if [ -z "$GAME_ID" ]; then
+  echo "- no games in this environment (seed the demo data to check booths); skipping booth checks"
+else
+  out=$(req "$API/games/$GAME_ID" "${AUTH[@]}");                            check "game detail" 200 "$out"
+  out=$(req "$API/games/$GAME_ID/booths?sort=congestion" "${AUTH[@]}");     check "booth list" 200 "$out"
+  BOOTH_ID=$(printf '%s' "$(body "$out")" | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d[0]['booth_id'] if d else '')")
+  if [ -n "$BOOTH_ID" ]; then
+    [ "$(body "$out" | json "['meta']['stale_after_minutes']")" = "15" ] && echo "✓ booth list returns the freshness threshold"
+    out=$(req "$API/games/$GAME_ID/booths/$BOOTH_ID" "${AUTH[@]}");         check "booth detail" 200 "$out"
+    out=$(req "$API/games/$GAME_ID/booths/$BOOTH_ID/congestion-history" "${AUTH[@]}"); check "congestion history" 200 "$out"
+    out=$(req -X PUT "$API/booths/$BOOTH_ID/favorite" "${AUTH[@]}");        check "add favorite" 200 "$out"
+    out=$(req "$API/games/$GAME_ID/booths?favorites=1" "${AUTH[@]}");       check "favorites filter" 200 "$out"
+    [ "$(body "$out" | json "['data'][0]['booth_id']")" = "$BOOTH_ID" ] && echo "✓ favorites filter returns the favorited booth"
+    out=$(req "$API/me/favorites" "${AUTH[@]}");                            check "favorites list" 200 "$out"
+    out=$(req -X DELETE "$API/booths/$BOOTH_ID/favorite" "${AUTH[@]}");     check "remove favorite" 200 "$out"
+  fi
+fi
 out=$(req -X POST "$API/auth/logout" "${AUTH[@]}");                         check "logout" 200 "$out"
 out=$(req "$API/me" "${AUTH[@]}");                                          check "token is revoked after logout" 401 "$out"
 
