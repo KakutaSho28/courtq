@@ -12,7 +12,7 @@
 | WP-B2 データモデル | ✅ 完了（`develop` にマージ済み） | [#3](https://github.com/KakutaSho28/courtq/pull/3) |
 | WP-B3 読み取り API | ✅ 完了（`develop` にマージ済み） | [#5](https://github.com/KakutaSho28/courtq/pull/5) |
 | WP-B4 ロール・認可・スタッフ API | ✅ 完了（`develop` にマージ済み） | [#6](https://github.com/KakutaSho28/courtq/pull/6) |
-| WP-B5 利用者の画面 S01〜S06 | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | `feature/wp-b5-user-screens` → `develop` |
+| WP-B5 利用者の画面 S01〜S06 | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | [#7](https://github.com/KakutaSho28/courtq/pull/7)（`feature/wp-b5-user-screens` → `develop`） |
 | WP-B6〜B10 | ⬜ 未着手 | — |
 
 ## 完了
