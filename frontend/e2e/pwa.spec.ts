@@ -84,8 +84,9 @@ test('オフラインでもアプリが起動し、前回取得した内容が�
   await page.goto('/');
   await waitForServiceWorker(page);
   await page.reload(); // Service Worker の制御下で API を取得し、キャッシュさせる
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
-  await expect.poll(async () => (await cachedUrls(page))['courtq-api']?.some((u) => u.includes('/api/me'))).toBe(true);
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
+  await expect(page.getByText('北浜ウィングス')).toBeVisible();
+  await expect.poll(async () => (await cachedUrls(page))['courtq-api']?.some((u) => u.includes('/api/games'))).toBe(true);
   await expect(page.getByRole('alert')).toHaveCount(0);
 
   // ネットワーク断を再現する。ページ側は setOffline、Service Worker の通信はサーバーを落として切る
@@ -94,8 +95,8 @@ test('オフラインでもアプリが起動し、前回取得した内容が�
   await page.reload();
 
   // アプリシェルが開き、前回の内容が表示される。オフラインであることが分かる
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
-  await expect(page.getByText('アリスさん、ようこそ。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
+  await expect(page.getByText('北浜ウィングス')).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('オフラインです');
   await expect(page.getByRole('alert')).toContainText('最後に取得した内容');
 
@@ -110,7 +111,7 @@ test('API の GET だけがキャッシュされ、POST（ログアウト）は�
   await page.goto('/');
   await waitForServiceWorker(page);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
 
   await page.evaluate(async (api) => {
     await fetch(`${api}/api/auth/logout`, { method: 'POST' });
@@ -129,7 +130,7 @@ test('ログアウトすると API キャッシュが消える（別ユーザー
   await page.goto('/');
   await waitForServiceWorker(page);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
   await expect.poll(async () => (await cachedUrls(page))['courtq-api']?.length ?? 0).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: 'ログアウト' }).click();
@@ -141,7 +142,7 @@ test('ログアウトすると API キャッシュが消える（別ユーザー
 test('「ホーム画面に追加」ボタンは、インストール可能になったときだけ表示され、押すとプロンプトが出る', async ({ page }) => {
   await loginAsAlice(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'ホーム画面に追加' })).toHaveCount(0);
 
   // ブラウザが発火する beforeinstallprompt を再現する

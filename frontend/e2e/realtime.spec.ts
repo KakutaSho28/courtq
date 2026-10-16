@@ -17,6 +17,7 @@ async function openHomeAsAlice(page: Page, baseURL: string) {
   await page.route(`${API}/**`, (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/broadcasting/auth')) authRequests.push(path);
+    if (path.endsWith('/games')) return route.fulfill({ json: { data: [] } });
     return route.fulfill({ json: { data: ALICE } });
   });
   await page.goto(`${baseURL}/`);
@@ -30,7 +31,7 @@ test.describe('リアルタイム（偽の Pusher サーバー）', () => {
     await fakePusher(page);
     const authRequests = await openHomeAsAlice(page, 'http://localhost:5175');
 
-    await expect(page.getByRole('status')).toHaveText('リアルタイム接続中');
+    await expect(page.locator('.realtime-badge')).toHaveText('リアルタイム接続中');
     expect(authRequests).toEqual([]);
   });
 
@@ -46,20 +47,20 @@ test.describe('リアルタイム（偽の Pusher サーバー）', () => {
     });
     const pusher = await fakePusher(page);
     await openHomeAsAlice(page, 'http://localhost:5175');
-    await expect(page.getByRole('status')).toHaveText('リアルタイム接続中');
+    await expect(page.locator('.realtime-badge')).toHaveText('リアルタイム接続中');
 
     pusher.drop();
 
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __badge: string[] }).__badge))
       .toContain('realtime-connecting');
-    await expect(page.getByRole('status')).toHaveText('リアルタイム接続中');
+    await expect(page.locator('.realtime-badge')).toHaveText('リアルタイム接続中');
   });
 });
 
 test('Pusher のキー未設定の環境ではバッジを出さず、通常どおり動作する', async ({ page }) => {
   await openHomeAsAlice(page, 'http://localhost:5174');
 
-  await expect(page.getByRole('heading', { name: 'CourtQ' })).toBeVisible();
-  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '試合を選ぶ' })).toBeVisible();
+  await expect(page.locator('.realtime-badge')).toHaveCount(0);
 });
