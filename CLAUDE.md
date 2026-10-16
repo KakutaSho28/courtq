@@ -120,8 +120,10 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 ## Realtime（Pusher Channels）
 
 - **ゲームごとに 1 つの公開チャンネル `game.{gameId}`**（内容が機微でなく、閲覧者ごとの認証負荷を避けるため）。チャンネル認証 API（`/api/broadcasting/auth`）は無い。
-- イベントは `ShouldBroadcast`（キュー経由で worker が送信）。ペイロードは小さく保つ（Pusher は約 10KB 上限）。
-- フロント: `src/lib/echo.ts`（シングルトン。`VITE_PUSHER_APP_KEY` 未設定なら null でリアルタイム無効）、`src/hooks/useRealtime.ts`。再接続したら一覧を取得し直す。
+- イベントは `ShouldBroadcast`（キュー経由で worker が送信。`ShouldBroadcastNow` にしない）。ペイロードは小さく保つ（Pusher は約 10KB 上限。数値・文字列・null だけ。更新したユーザーの情報は含めない）。
+  - `BoothCongestionUpdated`（`booth.congestion.updated`）と `ItemStockUpdated`（`item.stock.updated`）。`BoothStatusService` が、更新の確定とキャッシュ破棄のあとに送る（受け取った画面が取り直しても最新が返る）。配信が失敗しても更新自体は成功させ、`report()` に記録する。
+  - WebSocket は取りこぼしうるので、画面は**再接続時に取り直す**。つながっていない間（キー未設定・切断中）は 30 秒ごとに取り直す（`useGameRealtime`）。受け取った更新は `updated_at` を比べ、古いものは無視する。
+- フロント: `src/lib/echo.ts`（シングルトン。`VITE_PUSHER_APP_KEY` 未設定なら null でリアルタイム無効）、`src/hooks/useRealtime.ts`（接続状態・再接続の検知）、`src/hooks/useGameRealtime.ts`（試合のチャンネルの購読と、取り直し）。S04 / S05 が使う。
 - テスト: バックエンドは `Event::fake` とダミーキー。フロントの E2E は `e2e/helpers/fakePusher.ts` で WebSocket を偽の Pusher サーバーに差し替える（キー不要）。リアルタイムの E2E は Pusher キー設定済みの dev サーバー（ポート 5175）を使う。
 
 ## PWA
