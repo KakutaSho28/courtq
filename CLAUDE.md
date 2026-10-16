@@ -16,11 +16,12 @@ CourtQ（コートキュー = Court + Queue）は、バスケットボールの�
 
 ```
 backend/            Laravel 本体
-  app/Http/Controllers/  Auth, Health（以降 WP で Game, Booth, Favorite, Staff, Admin を追加）
+  app/Http/Controllers/  Auth, Health, Game, Booth, Favorite（以降 WP で Staff, Admin を追加）
   app/Http/Requests/     FormRequest（バリデーション）
   app/Http/Resources/    API Resource（レスポンス整形）
   app/Services/          業務ロジック（Controller から呼ぶ）
   app/Policies/          認可
+  app/Support/           小さな共通部品（Freshness: 「情報が古い可能性」の判定。しきい値は config('courtq.stale_after_minutes')）
   database/factories/    テスト用 Factory
   routes/api.php         全 API ルート（/api プレフィックス）
   tests/Feature/         機能テスト
