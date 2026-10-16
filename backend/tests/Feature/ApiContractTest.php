@@ -184,6 +184,8 @@ class ApiContractTest extends TestCase
         $this->assertDocumented('PUT /api/staff/games/{game}/menu-items/{menuItem}/stock', $this->putJson($stock, ['status' => 'low', 'quantity' => 4])->assertOk());
         $this->assertDocumented('PUT /api/staff/games/{game}/menu-items/{menuItem}/stock', $this->putJson($stock, ['status' => 'bad'])->assertUnprocessable());
         $this->assertDocumented('PUT /api/staff/games/{game}/menu-items/{menuItem}/stock', $this->putJson("/api/staff/games/".Game::factory()->create()->id."/menu-items/{$item->id}/stock", ['status' => 'low'])->assertNotFound());
+        $this->assertDocumented('GET /api/staff/booths/{booth}/menu-items', $this->getJson($menu)->assertOk());
+        $this->assertDocumented('GET /api/staff/booths/{booth}/menu-items', $this->getJson('/api/staff/booths/999999/menu-items')->assertNotFound());
         $created = $this->postJson($menu, ['name' => 'から揚げ', 'kind' => 'food', 'price' => 700]);
         $this->assertDocumented('POST /api/staff/booths/{booth}/menu-items', $created->assertCreated());
         $this->assertDocumented('POST /api/staff/booths/{booth}/menu-items', $this->postJson($menu, [])->assertUnprocessable());
@@ -222,6 +224,7 @@ class ApiContractTest extends TestCase
             'GET /api/staff/booths' => ['GET', '/api/staff/booths'],
             'PUT /api/staff/games/{game}/booths/{booth}/congestion' => ['PUT', "/api/staff/games/{$game->id}/booths/{$booth->id}/congestion"],
             'PUT /api/staff/games/{game}/menu-items/{menuItem}/stock' => ['PUT', "/api/staff/games/{$game->id}/menu-items/{$item->id}/stock"],
+            'GET /api/staff/booths/{booth}/menu-items' => ['GET', "/api/staff/booths/{$booth->id}/menu-items"],
             'POST /api/staff/booths/{booth}/menu-items' => ['POST', "/api/staff/booths/{$booth->id}/menu-items"],
             'PUT /api/staff/booths/{booth}/menu-items/{menuItem}' => ['PUT', "/api/staff/booths/{$booth->id}/menu-items/{$item->id}"],
             'DELETE /api/staff/booths/{booth}/menu-items/{menuItem}' => ['DELETE', "/api/staff/booths/{$booth->id}/menu-items/{$item->id}"],

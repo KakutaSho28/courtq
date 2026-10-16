@@ -78,6 +78,7 @@
 | GET | `/api/staff/booths` | staff, admin | 管理できるブース（STAFF-01） |
 | PUT | `/api/staff/games/{game}/booths/{booth}/congestion` | staff, admin・担当ブースのみ（admin は全ブース）（30 回/分/ユーザー） | 混雑の更新（STAFF-02） |
 | PUT | `/api/staff/games/{game}/menu-items/{menuItem}/stock` | staff, admin・担当ブースのみ（admin は全ブース）（30 回/分/ユーザー） | 在庫の更新（STAFF-03） |
+| GET | `/api/staff/booths/{booth}/menu-items` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの一覧（STAFF-04） |
 | POST | `/api/staff/booths/{booth}/menu-items` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの追加（STAFF-04） |
 | PUT | `/api/staff/booths/{booth}/menu-items/{menuItem}` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの変更（STAFF-04） |
 | DELETE | `/api/staff/booths/{booth}/menu-items/{menuItem}` | staff, admin・担当ブースのみ（admin は全ブース） | メニューの削除（STAFF-04） |
@@ -1016,6 +1017,65 @@ staff は担当ブースだけ、admin は全ブース。各ブースに、今�
 ```json
 {
     "message": "リクエストが多すぎます。しばらくしてからもう一度お試しください"
+}
+```
+
+
+---
+
+## GET `/api/staff/booths/{booth}/menu-items`
+
+**メニューの一覧（STAFF-04）**
+
+- 実装: `App\Http\Controllers\StaffMenuItemController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: staff, admin・担当ブースのみ（admin は全ブース）
+
+担当ブースのメニューを、販売終了（`is_active: false`）のものも含めて返す（来場者向けのブース詳細は販売中だけ。スタッフが販売を再開できるように）。`kind`、`id` の順。
+
+**パスパラメータ**: `booth`
+
+**レスポンス**
+
+- `200` メニューの一覧
+
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "booth_id": 1,
+            "name": "から揚げ 5 個",
+            "kind": "food",
+            "price": 700,
+            "description": null,
+            "is_active": true
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
 }
 ```
 
