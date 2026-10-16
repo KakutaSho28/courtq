@@ -21,6 +21,11 @@ class User extends Authenticatable
         'password',
     ];
 
+    /** DB の既定値と同じ。作成直後（DB から読み直す前）でも role が null にならないように */
+    protected $attributes = [
+        'role' => 'user',
+    ];
+
     protected $hidden = [
         'password',
         'remember_token',

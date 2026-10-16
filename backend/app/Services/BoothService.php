@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * ブースの閲覧（一覧・詳細・混雑の履歴）。書き込み（混雑・在庫の更新）は WP-B4 で追加する。
+ * ブースの閲覧（一覧・詳細・混雑の履歴）と、一覧キャッシュの破棄。書き込みは BoothStatusService / MenuItemService。
  */
 class BoothService
 {
@@ -58,10 +58,18 @@ class BoothService
         return array_map(fn (array $item) => $item + ['is_favorite' => in_array($item['booth_id'], $favoriteIds, true)], $items);
     }
 
-    /** 混雑・在庫を更新したら呼ぶ（一覧のキャッシュを捨てる）。WP-B4 の更新処理が使う */
+    /** 混雑・在庫を更新したら呼ぶ（一覧のキャッシュを捨てる） */
     public function forgetList(Game|int $game): void
     {
         Cache::forget($this->cacheKey($game instanceof Game ? $game->id : $game));
+    }
+
+    /** メニューを変えたら呼ぶ。そのブースが出店しているすべての試合の一覧キャッシュを捨てる（在庫の有無が変わりうるため） */
+    public function forgetListsForBooth(Booth $booth): void
+    {
+        foreach (GameBooth::query()->where('booth_id', $booth->id)->pluck('game_id') as $gameId) {
+            $this->forgetList($gameId);
+        }
     }
 
     /**
@@ -110,7 +118,8 @@ class BoothService
             ->values();
     }
 
-    private function gameBoothOrFail(Game $game, Booth $booth): GameBooth
+    /** その試合に出店しているブースの行（game_booths）。出店していなければ 404 */
+    public function gameBoothOrFail(Game $game, Booth $booth): GameBooth
     {
         $gameBooth = GameBooth::query()->where('game_id', $game->id)->where('booth_id', $booth->id)->first();
 
