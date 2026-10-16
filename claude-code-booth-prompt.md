@@ -7,7 +7,7 @@ Reply in Japanese. Commit messages, PR titles and PR descriptions in Japanese wi
 My ADCP evaluation goal (self-written) defines level 3 as "ブース一覧・詳細・混雑状況投稿などの基本機能が完了し、公開可能な状態".
 We are building the app I originally planned in a **new, empty GitHub repository `courtq`** (cloned at `~/courtq`, current working directory).
 My previous project **Spovie** (video annotation) lives at `~/spovie` and stays as it is — treat it as a **read-only reference**.
-Copy and adapt its proven foundation (Docker setup, Laravel 10 + Sanctum auth, Service-layer / FormRequest / Policy / Resource rules,
+Copy and adapt its proven foundation (Docker setup, Laravel + Sanctum auth — Spovie is on Laravel 10, but **CourtQ uses Laravel 12 / Sanctum 4 / PHP 8.2+** (decided after the B1 bootstrap: Laravel 10 no longer receives security fixes), Service-layer / FormRequest / Policy / Resource rules,
 JSON error handling, CI workflow, production Dockerfile + Railway configs, Vercel config, React + TS + Vite setup, API client,
 auth store, Echo/Pusher setup with the "disabled when keys are missing" behavior, PWA setup, smoke test, `docs:api` generator, CLAUDE.md rules).
 Do NOT copy any Spovie domain code (video, YouTube, annotation, Fabric.js canvas, clip/FFmpeg, share link, comment, team, S3/R2 storage).
