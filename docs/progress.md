@@ -13,7 +13,7 @@
 | WP-B3 読み取り API | ✅ 完了（`develop` にマージ済み） | [#5](https://github.com/KakutaSho28/courtq/pull/5) |
 | WP-B4 ロール・認可・スタッフ API | ✅ 完了（`develop` にマージ済み） | [#6](https://github.com/KakutaSho28/courtq/pull/6) |
 | WP-B5 利用者の画面 S01〜S06 | ✅ 完了（`develop` にマージ済み） | [#7](https://github.com/KakutaSho28/courtq/pull/7) |
-| WP-B6 スタッフの画面 S07〜S10 | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | `feature/wp-b6-staff-screens` → `develop` |
+| WP-B6 スタッフの画面 S07〜S10 | 🔄 実装・検証済み、PR 作成済み（マージ待ち） | [#8](https://github.com/KakutaSho28/courtq/pull/8)（`feature/wp-b6-staff-screens` → `develop`） |
 | WP-B7〜B10 | ⬜ 未着手 | — |
 
 ## 完了
