@@ -1,11 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { checkDeployEnv, shouldCheck } from './scripts/check-deploy-env.mjs';
 
 /** API レスポンスのランタイムキャッシュ名（ログイン/ログアウト時に破棄する。src/lib/pwa.ts と合わせる） */
 const API_CACHE = 'courtq-api';
 
-export default defineConfig({
+const config = defineConfig({
   plugins: [
     react(),
     VitePWA({
@@ -58,4 +59,18 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+});
+
+export default defineConfig(({ command, mode }) => {
+  // Vercel のビルドでは、VITE_ の変数の取り違え（未設定・localhost・末尾スラッシュなど）をここで止める
+  const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
+  if (command === 'build' && shouldCheck(env)) {
+    const { errors, warnings } = checkDeployEnv(env);
+    for (const warning of warnings) console.warn(`[警告] ${warning}`);
+    if (errors.length > 0) {
+      throw new Error(`環境変数の確認でエラーがあります。ビルドを中止します。\n${errors.map((e) => `- ${e}`).join('\n')}\n（docs/deployment.md の環境変数の表を確認してください）`);
+    }
+  }
+
+  return config;
 });

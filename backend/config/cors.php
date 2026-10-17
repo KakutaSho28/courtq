@@ -35,7 +35,9 @@ return [
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    // プリフライト（OPTIONS）の結果をブラウザに 1 時間キャッシュさせる。0 だと、Vercel から Railway への認証付きの
+    // 全リクエストの前に確認の通信が毎回入り、会場の弱い回線で往復が倍になる
+    'max_age' => 3600,
 
     'supports_credentials' => false,
 
