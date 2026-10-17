@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "e2e": "playwright test",
-    "test:deploy": "node --test \"scripts/*.test.mjs\""
+    "test:deploy": "node --test"
   },
   "dependencies": {
     "axios": "^1.7.0",
