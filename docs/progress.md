@@ -17,7 +17,7 @@
 | WP-B8 リアルタイム | ✅ 完了（`develop` にマージ済み） | [#9](https://github.com/KakutaSho28/courtq/pull/9) |
 | WP-B9a デプロイ準備 | 🔄 実装・検証済み、PR 作成予定（マージ待ち） | `feature/wp-b9a-deploy-prep` → `develop` |
 | WP-B9b PWA・オフライン・Lighthouse | ⬜ 未着手（B9a の次） | — |
-| WP-B7 管理画面 | ⬜ 未着手（B9b の次） | — |
+| WP-B7 管理画面 S11〜S14 | 🔄 実装・検証済み、PR 作成予定（マージ待ち） | `feature/wp-b7-admin` → `develop` |
 | WP-B10 ドキュメント仕上げ | ⬜ 未着手 | — |
 
 ## 完了
@@ -193,9 +193,14 @@ e2e の注記: このセッションの Playwright（1.4x）は `/opt/pw-browser
 | ADMIN-05 | `POST /admin/booths/{booth}/invitations` | 401 | 403 | 403 | 403 | 403 | ○ |
 | ADMIN-06 | `GET /admin/booths/{booth}/staff` | 401 | 403 | 403 | 403 | 403 | ○ |
 | ADMIN-06 | `DELETE /admin/booths/{booth}/staff/{user}` | 401 | 403 | 403 | 403 | 403 | ○ |
+| ADMIN-01 | `GET` / `POST /admin/games`、`GET` / `PUT` / `DELETE /admin/games/{game}`（WP-B7） | 401 | 403 | 403 | 403 | 403 | ○ |
+| ADMIN-02 | `POST /admin/games/import`（WP-B7。1 ユーザー 10 回/分） | 401 | 403 | 403 | 403 | 403 | ○ |
+| ADMIN-03 | `GET` / `POST /admin/booths`、`GET` / `PUT` / `DELETE /admin/booths/{booth}`（WP-B7） | 401 | 403 | 403 | 403 | 403 | ○ |
+| ADMIN-04 | `GET` / `PUT /admin/games/{game}/booths`（WP-B7） | 401 | 403 | 403 | 403 | 403 | ○ |
+| （会場） | `GET` / `POST /admin/venues`（WP-B7。試合の登録フォームと CSV の会場名の照合用） | 401 | 403 | 403 | 403 | 403 | ○ |
 
 - 閲覧系（GAME / BOOTH / FAV）は B3 のまま、ログインしていれば全員 ○。
-- ADMIN-01〜04（試合・ブースの作成/編集、CSV、試合へのブース割り当て）は管理画面と一緒に WP-B7 で作る。B4 は招待とスタッフ管理（ADMIN-05 / 06）だけ。
+- ADMIN-01〜04（試合・ブースの作成/編集、CSV、試合へのブース割り当て）は管理画面と一緒に WP-B7 で作った（上の表の下 5 行）。B4 は招待とスタッフ管理（ADMIN-05 / 06）だけ。
 
 **業務ルール**
 
@@ -380,6 +385,37 @@ e2e の注記: このセッションの Playwright（1.4x）は `/opt/pw-browser
    - **注意: 将来、未ログインでも混雑状況を見られるようにする場合は、Echo をログインなしで接続するように変更する必要がある**（`frontend/src/lib/echo.ts` の `getEcho()` がトークン未設定なら null を返す部分と、ログアウト時に切断する処理）。
 4. `/me` は B1 で id / name / email、B2 で `role`、B4 で担当ブースを追加する。
 5. `doctrine/dbal` は外す（既存カラムの型変更が必要になったら戻す）。
+
+### WP-B7 決定事項と検証（2026-10-19）
+
+管理画面 S11〜S14 と、ADMIN-01〜04（＋会場）の API。誰が呼べるかは、上の「WP-B4 の認可ルール」の表（下 5 行）どおりに全マスをテストした（`AuthorizationTest::MATRIX`）。
+
+決めたこと:
+
+- **CSV は「確認 → 取り込み」の 2 段階**（`dry_run=1` で保存せずに結果だけ返す）。**1 行でも誤りがあれば何も保存しない**（途中まで入ると、どこまで入ったか分からなくなるため）。誤りは「N 行目: ...」を全部返して画面に一覧で出す。
+- **すでに登録済みの試合は取り込まずに飛ばす**（スキップ）。ファイル内の重複も同じ。再取り込みしても重複しない。
+- **節が空（NULL）の試合の重複は、アプリ側で確認する**（B2 で積んでいた宿題）。MySQL の一意制約は NULL 同士を別物として扱うため、`AdminGameService::findDuplicate` が NULL 安全に調べる（手入力と CSV の両方）。
+- CSV の見出しは英語（`season,section,date,tipoff_time,home_team,away_team,venue`）と日本語の両方を受け付ける。文字コードは UTF-8（BOM あり/なし）と Shift_JIS（Excel の「CSV」）を自動判定。日付は `2026/11/1`、時刻は `9:05` も可。1MB・500 行まで。1 ユーザー 10 回/分。
+- **会場は名前の完全一致で照合し、無ければ誤りにする**（打ち間違いで会場が増えるのを防ぐ）。代わりに、試合の登録フォームから会場をその場で追加できる（`/admin/venues`）。
+- **記録（混雑・在庫）がある試合は削除できない／記録があるブースは試合から外せない／試合に割り当て済みのブースは削除できない**。履歴が消えるのを防ぐため。外したいときは試合を「終了」に、ブースを「閉店（`is_open=false`）」にする。
+- **営業中 / 閉店中（`is_open`）の切り替えは、管理者が試合ごとの出店設定（S13）で行う**（B4・B6 で積んでいた宿題。スタッフには切り替えさせない）。
+- 割り当て・ブースの更新は一覧のキャッシュを捨てる。**リアルタイム配信はしない**ので、来場者の画面には次の取得（30 秒ごとの取り直し・再接続・画面に戻ったとき）から反映される。
+- 管理画面は `RequireRole`（スタッフの画面と同じガードを一般化）。**画面の出し分けだけで、本当の防御はサーバー側**（来場者・スタッフが URL を直接開くと試合一覧に戻り、管理用の API は呼ばれない）。
+- 取り消せない操作（削除・担当解除）は、確認の表示を挟む。オフラインでは送らず理由を出す（`useWriteAction`）。
+- バリデーションの日本語文言（`lang/ja/validation.php`）と属性名を、新しい項目に合わせて追加した。
+- E2E で見つけた不具合を直した: `apiClient` の既定が `application/json` のため、axios が `FormData` を JSON に変換していた（CSV のファイルが空の `{}` で送られる）。`Content-Type: multipart/form-data` を指定して直した。
+
+| 確認 | 結果 |
+|---|---|
+| `php artisan test`（sqlite / MySQL 8.0） | ✅ どちらも 422 件成功（B9b より前の 278 件 + 管理 API・サービス・認可の表）。MySQL で失敗していた B9a のテスト（`DeployCheckServiceTest` の DB 接続の確認が sqlite 前提だった）は、接続設定を決め打ちにして直した |
+| `php artisan route:list` / `docs:api` | ✅ 39 ルート、仕様書は再生成済み |
+| Playwright E2E | ✅ 80 件成功（管理画面 25 件: 役割による出し分け 3 / 試合 7 / CSV 2 / ブース 3 / 出店ブース 4 / 招待・担当 2 / 360px 4） |
+| 本物のバックエンド（PHP 内蔵サーバー + Vite + sqlite のデモデータ）で、管理者としてログイン → CSV の確認 → 取り込み → 出店ブースの設定 → 招待コードの発行 | ✅（Shift_JIS の CSV を curl で、UI からは UTF-8 の CSV を取り込んだ。再取り込みは全件スキップ） |
+| `npm run build`（tsc strict + vite + PWA） | ✅ |
+| 実機のスマホでの操作・ファイル選択（iOS Safari の CSV 選択など） | **not verified**（Playwright の Chromium の 360px 幅だけ） |
+| 実際の Excel が書き出した Shift_JIS の CSV | **not verified**（`mb_convert_encoding` で作ったデータで検証。`iconv` での変換も確認） |
+| 招待コードの「コードをコピー」（`navigator.clipboard`） | **not verified**（HTTPS でない環境では使えず、失敗しても手で書き写せる表示にしてある） |
+| MySQL での同時操作（管理者が同時に同じ試合を編集するなど） | **not verified** |
 
 ## 未解決の質問
 
