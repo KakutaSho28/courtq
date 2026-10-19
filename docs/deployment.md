@@ -302,7 +302,7 @@ bash scripts/smoke-test.sh https://<Railway のドメイン>/api https://<Vercel
 | 12 件の同時更新（MySQL + 複数の php-fpm ワーカー）で、在庫の行が 1 件・履歴が 12 件・全部 200 | ✅ |
 | スモークテストが、5 種類の設定ミス（再デプロイ忘れ・localhost のまま・CORS の不一致・`/api` なし・HTML が返る）を検出すること | ✅ |
 | バックエンドの全テストを **MySQL 8.0** で実行（273 件 → 278 件） | ✅ |
-| 本番の **Dockerfile を通しでビルド** | **not verified**（この環境では、Debian のパッケージサーバーに接続できず `apt-get` が使えない。拡張の層だけ実際にビルドし、そのほかは GitHub Actions の `Docker image` で確認する想定） |
+| 本番の **Dockerfile を通しでビルド**、本番イメージ + MySQL 8 で web・worker を起動してスモークテスト | ✅ GitHub Actions の `Docker image`（`docker.yml`）で成功（PR #10、2026-10-17） |
 | **Railway に実際にデプロイ**（Root Directory・ターゲットポート・参照変数・`railway.worker.json` のパス指定・ヘルスチェック） | **not verified**（Railway のアカウントがない） |
 | **Vercel に実際にデプロイ**（Root Directory・環境変数・rewrite・ヘッダー） | **not verified** |
 | **Pusher との実際の通信**（署名・cluster・TLS・接続数の上限） | **not verified** |
