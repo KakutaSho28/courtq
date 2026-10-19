@@ -38,14 +38,16 @@ const config = defineConfig({
         skipWaiting: true,
         // 上から順に評価され、最初に一致したものが使われる。キャッシュしないものを先に NetworkOnly で除外する
         runtimeCaching: [
-          // 一覧などの GET API: ネットワーク優先（3秒で諦めて最後に取得した内容を表示）、最大5分。鮮度の扱いは WP-B9 で詳細化する
+          // GET API: ネットワーク優先（3秒で諦めて最後に取得した内容を表示）。
+          // 試合当日の会場は電波が不安定なため、最後に取得した内容を 1 時間は表示できるようにする。
+          // 古い内容かどうかは画面側が updated_at から計算して「情報が古い可能性があります」を出すので、長く残しても誤解させない
           {
             urlPattern: ({ request, url }) => request.method === 'GET' && url.pathname.startsWith('/api/'),
             handler: 'NetworkFirst',
             options: {
               cacheName: API_CACHE,
               networkTimeoutSeconds: 3,
-              expiration: { maxAgeSeconds: 5 * 60, maxEntries: 50 },
+              expiration: { maxAgeSeconds: 60 * 60, maxEntries: 50 },
               cacheableResponse: { statuses: [200] },
             },
           },

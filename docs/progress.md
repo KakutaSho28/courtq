@@ -15,9 +15,9 @@
 | WP-B5 利用者の画面 S01〜S06 | ✅ 完了（`develop` にマージ済み） | [#7](https://github.com/KakutaSho28/courtq/pull/7) |
 | WP-B6 スタッフの画面 S07〜S10 | ✅ 完了（`develop` にマージ済み） | [#8](https://github.com/KakutaSho28/courtq/pull/8) |
 | WP-B8 リアルタイム | ✅ 完了（`develop` にマージ済み） | [#9](https://github.com/KakutaSho28/courtq/pull/9) |
-| WP-B9a デプロイ準備 | 🔄 実装・検証済み、PR 作成予定（マージ待ち） | `feature/wp-b9a-deploy-prep` → `develop` |
-| WP-B9b PWA・オフライン・Lighthouse | ⬜ 未着手（B9a の次） | — |
-| WP-B7 管理画面 S11〜S14 | 🔄 実装・検証済み、PR 作成予定（マージ待ち） | `feature/wp-b7-admin` → `develop` |
+| WP-B9a デプロイ準備 | ✅ 完了（`develop` にマージ済み） | [#10](https://github.com/KakutaSho28/courtq/pull/10) |
+| WP-B9b PWA・オフライン・Lighthouse | 🔄 実装・検証済み、PR 作成予定（マージ待ち） | `feature/wp-b9b-pwa` → `develop` |
+| WP-B7 管理画面 | ⬜ 未着手（B9b の次） | — |
 | WP-B10 ドキュメント仕上げ | ⬜ 未着手 | — |
 
 ## 完了
@@ -32,10 +32,24 @@
 
 順番は 2026-10-16 にユーザーが変更した: **B9a（デプロイ準備）→ B9b（PWA）→ B7（管理画面）→ B10**。
 
-1. WP-B9a の PR をユーザーがマージする。
+1. WP-B9b の PR をユーザーがマージする。
 2. ユーザーが `docs/deployment.md` 4 章のダッシュボード手順（Pusher → Railway → Vercel → worker）を行い、`scripts/smoke-test.sh` を実行して結果を共有する（実環境の確認は、ここで初めて「確認済み」にできる）。
-3. WP-B9b: ブース一覧・詳細をオフラインで開いたときのキャッシュ表示（B5 で未確認）、PWA でのリアルタイムの扱い、Lighthouse。
-4. WP-B7（管理画面 S11〜S14 + CSV 取り込み。ADMIN-01〜04。`section` が NULL の試合の重複確認、`is_open` の切り替えもここ）→ WP-B10（ER 図・権限表・自己評価）。
+3. WP-B7（管理画面 S11〜S14 + CSV 取り込み。ADMIN-01〜04。`section` が NULL の試合の重複確認、`is_open` の切り替えもここ）→ WP-B10（ER 図・権限表・自己評価）。
+
+### WP-B9b 決定事項と検証（2026-10-19）
+
+- **API キャッシュの保持を 5 分 → 1 時間にした**（`vite.config.ts`）。会場は電波が不安定で、5 分を過ぎるとオフラインで何も出なくなるため。古さは画面側が `updated_at` から計算し、15 分を超えたら「情報が古い可能性があります」を出す（オフラインで時間がたっても出ることを E2E で確認）ので、長く残しても誤解させない。ユーザー固有のデータ（お気に入りの印）はログイン/ログアウトで破棄するのは変えていない。
+- **オフラインで見られるのは「前に開いた URL」だけ**: キャッシュは URL（絞り込みの条件を含む）ごと。まだ開いていないブース・絞り込みは、オフラインの案内（再読み込みボタンつき）を出す。真っ白にはならない。
+- 売り切れのメニュー名・価格の文字色を `#8a909c`（コントラスト 3.2）→ `#5f6672`（5.8）に変更（Lighthouse が検出）。`robots.txt` を追加（SEO の指摘）。
+- E2E のモック API は 1 つで切断状態を共有するため、`pwa.spec.ts` は直列（`--repeat-each` を使うときは `--workers=1`）。
+
+| 確認 | 結果 |
+|---|---|
+| PWA の E2E（追加 4 件: オフラインでブース一覧・詳細が表示される / 時間がたつと古い情報の注意が出る / 未訪問の画面はオフラインの案内 / 接続が戻ると取り直す） | ✅ 10 件成功、`--repeat-each=3 --workers=1` を 3 回繰り返して全件成功 |
+| Lighthouse 11.7.1（モバイル設定、本番ビルドを `vite preview` で配信、モック API）: ログイン / 試合一覧 / ブース一覧 / ブース詳細 | ✅ Performance・Accessibility・Best Practices・SEO・PWA がすべて 100（修正後） |
+| 実機のスマホでのホーム画面追加・オフライン・Lighthouse（実ネットワーク・実 API） | **not verified** |
+| iOS Safari の Service Worker / PWA の挙動 | **not verified**（iOS は Cache や Push の扱いが Chrome と異なる） |
+| 本番（Vercel）の `sw.js` 配信ヘッダー・キャッシュ | **not verified**（スモークテストが確認する項目。ユーザーのデプロイ後に実行） |
 
 ### WP-B9a 決定事項と検証（2026-10-16）
 
@@ -55,8 +69,8 @@
 | nginx + php-fpm + supervisord + 本物の `start-web.sh` でスモークテスト | ✅（ホストは Ubuntu + PHP 8.3） |
 | スモークテストが 5 種類の設定ミスを検出 | ✅ |
 | `npm run test:deploy`（11 件）、`npm run build`、E2E | 最終報告に記載 |
-| 本番 Dockerfile の通しビルド（`apt-get` に接続できない環境だった） | **not verified**（CI の `docker.yml` で確認） |
-| `docker.yml` の GitHub Actions 上の実行 | **not verified** |
+| 本番 Dockerfile の通しビルド（手元では `apt-get` に接続できなかった） | ✅ GitHub Actions の `docker.yml` で成功（PR #10、2026-10-17） |
+| `docker.yml`（本番イメージ + MySQL 8 で web・worker を起動 → スモークテスト）の GitHub Actions 上の実行 | ✅ 成功（PR #10、2026-10-17） |
 | Railway / Vercel / Pusher の実環境（Root Directory・ターゲットポート・参照変数・`railway.worker.json` のパス指定・`railway ssh`・Pusher の上限） | **not verified**（ダッシュボード操作はユーザー） |
 
 ### WP-B1 の検証（`develop` @ `7982918`、2026-10-16）
