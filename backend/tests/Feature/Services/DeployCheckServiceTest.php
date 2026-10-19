@@ -4,6 +4,7 @@ namespace Tests\Feature\Services;
 
 use App\Services\DeployCheckService;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -158,8 +159,9 @@ class DeployCheckServiceTest extends TestCase
     public function test_the_command_succeeds_and_checks_the_database_connection(): void
     {
         $this->productionConfig();
-        // テストの DB（sqlite）につながるか確認する。設定の検査では mysql を要求するので、ここは設定の検査を通した状態で DB だけ差し替える
-        config(['database.connections.mysql' => config('database.connections.sqlite'), 'database.default' => 'mysql']);
+        // 接続できる DB（メモリ上の sqlite）に差し替えて、つながるか確認する。テストを流している DB が MySQL でも sqlite でも同じ結果にするため、接続の設定は決め打ちにする。設定の検査では mysql を要求するので、ここは設定の検査を通した状態で DB だけ差し替える
+        config(['database.connections.mysql' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true], 'database.default' => 'mysql']);
+        DB::purge('mysql');
         config(['database.connections.mysql.host' => 'mysql.railway.internal', 'database.connections.mysql.port' => '3306', 'database.connections.mysql.username' => 'root', 'database.connections.mysql.password' => 'x']);
 
         $this->artisan('app:deploy-check', ['--wait-db' => 3])
