@@ -16,7 +16,7 @@ CourtQ（コートキュー = Court + Queue）は、バスケットボールの�
 
 ```
 backend/            Laravel 本体
-  app/Http/Controllers/  Auth, Health, Game, Booth, Favorite, Staff*（スタッフ）, AdminBoothStaff（以降 WP で管理画面用の Admin を追加）
+  app/Http/Controllers/  Auth, Health, Game, Booth, Favorite, Staff*（スタッフ）, Admin*（管理者: Game / Booth / GameBooth / BoothStaff / Venue）
   app/Http/Middleware/   EnsureRole（role:...）, UnescapedJsonResponse ほか
   app/Http/Requests/     FormRequest（バリデーション）
   app/Http/Resources/    API Resource（レスポンス整形）
@@ -34,9 +34,10 @@ frontend/src/
   lib/time.ts            「○分前」・鮮度（isStale）・日本時間の日付表示
   hooks/useApiResource.ts 読み込み中 / エラー / オフラインの状態を返す共通の読み込み（online・画面復帰で取り直す）
   hooks/useWriteAction.ts 書き込みの共通窓口（オフラインなら送らない・失敗は error に出す・二重送信を防ぐ・403 なら権限を取り直す）
-  lib/role.ts            canUseStaffScreens（画面の出し分け用。本当の防御はサーバー側）
+  lib/role.ts            canUseStaffScreens / canUseAdminScreens（画面の出し分け用。本当の防御はサーバー側）
   pages/                 S01 Login / S02 Register / S03 Games / S04 BoothList / S05 BoothDetail / S06 Favorites /
-                         S07 StaffBooths / S08 StaffUpdate / S09 StaffMenu / S10 Invite（S07〜S09 は RequireStaff の中）
+                         S07 StaffBooths / S08 StaffUpdate / S09 StaffMenu / S10 Invite（S07〜S09 は RequireRole(スタッフ) の中）/
+                         S11 AdminGames（CSV 取り込み）/ S12 AdminBooths / S13 AdminGameBooths / S14 AdminStaff（RequireRole(管理者) の中）
   store/auth.ts          Zustand 認証ストア
   lib/echo.ts            Echo シングルトン（公開チャンネルのみ）
   components/, hooks/, pages/, types/
@@ -79,7 +80,7 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
   - 状態色は `frontend/src/styles.css` の `--status-1〜4`（1 `#15803D` / 2 `#F5C400` / 3 `#C2410C` / 4 `#7F1D1D`）。色を変えるときは、文字とのコントラスト（4.5 以上）と、隣り合う段階・ブランドのオレンジとの色の差を数値で確かめる（値と根拠は styles.css のコメント）。
   - 混雑は `CongestionBadge`（色 + 4 段階のメーター + 文言）、最終更新は `Freshness`（「最終更新 ○分前」と「情報が古い可能性があります」）を使う。鮮度は画面側で `updated_at` と `meta.stale_after_minutes` から計算する（オフラインで古いキャッシュを見ているときも正しく出すため）。
 - スタッフの画面の書き込みは `useWriteAction` を使い、**成功したふりをしない**: オフラインなら送らずに理由を出す。サーバーの応答を待ってから反映する（在庫のように押した瞬間に表示を変えるものは、失敗したら必ず元に戻す）。失敗したら入力を残して再試行できるようにし、更新した時刻はサーバーの応答の値を出す。
-- 画面の出し分け（`RequireStaff` など）は見た目のためだけで、権限の判定には使わない。必ずサーバー側（`role` ミドルウェアと Policy）で守る。
+- 画面の出し分け（`RequireRole` など）は見た目のためだけで、権限の判定には使わない。必ずサーバー側（`role` ミドルウェアと Policy）で守る。
 - **B.LEAGUE の名称・チームロゴ・公式ブランドを UI・デモデータに使わない。** デモのチーム・会場・ブースはすべて架空にする。
 - スコープ外のものは作らない（画像アップロード、外部の日程サイトのスクレイピング／自動同期など）。
 
@@ -108,6 +109,14 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
   - ルールの一覧は `docs/progress.md`「WP-B4 の認可ルール」。テストは `tests/Feature/AuthorizationTest.php` の `MATRIX`（書き込み API を足したら行を足す。足さないと `test_every_protected_route_is_in_the_matrix` が失敗する）。
 - CORS は直接の API 呼び出しを防がない（ブラウザの画面からの呼び出しを制限するだけ）。守っているのはサーバー側の認可。
 - 認可のテストを省略しない。特に「一般ユーザーが自分のトークンで書き込み API を直接叩くと 403」を全書き込み API で検証する。
+
+## 管理者の機能（ADMIN-01〜06）
+
+- 試合の CSV 取り込み（`GameCsvImportService`）は「確認（`dry_run=1`）→ 取り込み」の 2 段階で、**1 行でも誤りがあれば何も保存しない**。登録済み・ファイル内の重複はスキップ。会場は名前の完全一致（無ければ誤り）。Shift_JIS も読める。外部の日程サイトのスクレイピング・自動同期はしない。
+- **節（`section`）が NULL の試合の重複は DB の一意制約では防げない**ので、`AdminGameService::findDuplicate` でアプリ側で確認する（手入力と CSV の両方）。
+- 記録（混雑・在庫）がある試合は削除できず、記録があるブースは試合から外せず、試合に割り当て済みのブースは削除できない（履歴を消さないため）。外したいときは試合を「終了」、ブースを「閉店（`is_open=false`）」にする。`is_open` の切り替えは管理者が S13 で行う。
+- 管理 API を足したら `AuthorizationTest::MATRIX` に行を足し、`api-examples.php` に説明を足す。新しいバリデーションルール・項目は `lang/ja/validation.php` にも文言を足す。
+- `FormData`（ファイル）を送るときは、`apiClient` の既定の `application/json` のままだと axios が JSON に変換してしまうので、`Content-Type: multipart/form-data` を指定する（`importGamesCsv`）。
 
 ## Deploy
 

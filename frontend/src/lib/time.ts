@@ -67,3 +67,24 @@ export function formatClock(iso: string): string {
 export function formatYen(price: number): string {
   return `¥${price.toLocaleString('ja-JP')}`;
 }
+
+const localInputFormat = new Intl.DateTimeFormat('en-CA', {
+  timeZone: DISPLAY_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** <input type="datetime-local"> の値（日本時間）。「2026-11-01T19:05」 */
+export function toDatetimeLocal(iso: string): string {
+  const parts = Object.fromEntries(localInputFormat.formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/** datetime-local の値（日本時間）を、サーバーへ送る ISO 8601 にする。会場は日本なので端末のタイムゾーンに関係なく +09:00 */
+export function fromDatetimeLocal(value: string): string {
+  return `${value}:00+09:00`;
+}

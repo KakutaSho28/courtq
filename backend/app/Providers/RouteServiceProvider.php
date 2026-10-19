@@ -48,6 +48,11 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by('invitation-accept:'.$request->user()?->id);
         });
 
+        // 試合の CSV 取り込み（ADMIN-02）: 1 ユーザー 10 回/分（プレビューと本番の取り込みで使う）
+        RateLimiter::for('admin-import', function (Request $request) {
+            return Limit::perMinute(10)->by('admin-import:'.$request->user()?->id);
+        });
+
         $this->routes(function () {
             Route::middleware('api')
                 ->prefix('api')

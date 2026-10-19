@@ -1,10 +1,14 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './store/auth';
-import { canUseStaffScreens } from './lib/role';
+import { canUseAdminScreens, canUseStaffScreens } from './lib/role';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { LoadError, Loading } from './components/LoadState';
 import { Layout } from './components/Layout';
 import { OfflineBanner } from './components/OfflineBanner';
+import { AdminBoothsPage } from './pages/AdminBooths';
+import { AdminGameBoothsPage } from './pages/AdminGameBooths';
+import { AdminGamesPage } from './pages/AdminGames';
+import { AdminStaffPage } from './pages/AdminStaff';
 import { BoothDetailPage } from './pages/BoothDetail';
 import { BoothListPage } from './pages/BoothList';
 import { FavoritesPage } from './pages/Favorites';
@@ -23,11 +27,11 @@ function RequireAuth() {
 }
 
 /**
- * スタッフ専用の画面のガード。来場者（role=user）は、スタッフの画面を開こうとしても試合一覧に戻される。
+ * 役割が必要な画面のガード。足りない人（来場者など）は、その画面を開こうとしても試合一覧に戻される。
  * 役割が分からないとき（古い保存データ）は、/me で確認できるまで待つ。画面の出し分けだけで、
  * 本当の防御はサーバー側（role ミドルウェアと Policy）が行っている。
  */
-function RequireStaff() {
+function RequireRole({ allowed, what }: { allowed: (user: ReturnType<typeof useAuthStore.getState>['user']) => boolean; what: string }) {
   const user = useAuthStore((s) => s.user);
   const online = useOnlineStatus();
 
@@ -35,11 +39,11 @@ function RequireStaff() {
     return online ? (
       <Loading what="権限の確認" />
     ) : (
-      <LoadError what="スタッフの画面" error={{ kind: 'offline', message: 'オフラインです。' }} onRetry={() => window.location.reload()} />
+      <LoadError what={what} error={{ kind: 'offline', message: 'オフラインです。' }} onRetry={() => window.location.reload()} />
     );
   }
 
-  return canUseStaffScreens(user) ? <Outlet /> : <Navigate to="/" replace />;
+  return allowed(user) ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 /** 逆ガード：ログイン済みなら試合一覧へ */
@@ -71,10 +75,19 @@ export function App() {
             <Route path="/invite" element={<InvitePage />} />
 
             {/* S07 担当ブース / S08 混雑・在庫の更新 / S09 メニュー管理（スタッフ・管理者だけ） */}
-            <Route element={<RequireStaff />}>
+            <Route element={<RequireRole allowed={canUseStaffScreens} what="スタッフの画面" />}>
               <Route path="/staff" element={<StaffBoothsPage />} />
               <Route path="/staff/games/:gameId/booths/:boothId" element={<StaffUpdatePage />} />
               <Route path="/staff/booths/:boothId/menu" element={<StaffMenuPage />} />
+            </Route>
+
+            {/* S11 試合の管理（CSV 取り込み）/ S12 ブースの管理 / S13 試合の出店ブース / S14 招待コードと担当スタッフ（管理者だけ） */}
+            <Route element={<RequireRole allowed={canUseAdminScreens} what="管理の画面" />}>
+              <Route path="/admin" element={<Navigate to="/admin/games" replace />} />
+              <Route path="/admin/games" element={<AdminGamesPage />} />
+              <Route path="/admin/games/:gameId/booths" element={<AdminGameBoothsPage />} />
+              <Route path="/admin/booths" element={<AdminBoothsPage />} />
+              <Route path="/admin/booths/:boothId/staff" element={<AdminStaffPage />} />
             </Route>
           </Route>
         </Route>

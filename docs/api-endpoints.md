@@ -91,6 +91,21 @@
 | POST | `/api/admin/booths/{booth}/invitations` | admin | 招待コードの発行（ADMIN-05） |
 | GET | `/api/admin/booths/{booth}/staff` | admin | ブースの担当スタッフ（ADMIN-06） |
 | DELETE | `/api/admin/booths/{booth}/staff/{user}` | admin | 担当の解除（ADMIN-06） |
+| GET | `/api/admin/games` | admin | 試合の一覧（ADMIN-01） |
+| POST | `/api/admin/games` | admin | 試合の登録（ADMIN-01） |
+| POST | `/api/admin/games/import` | admin | 試合の CSV 取り込み（ADMIN-02） |
+| GET | `/api/admin/games/{game}` | admin | 試合の詳細（ADMIN-01） |
+| PUT | `/api/admin/games/{game}` | admin | 試合の更新（ADMIN-01） |
+| DELETE | `/api/admin/games/{game}` | admin | 試合の削除（ADMIN-01） |
+| GET | `/api/admin/venues` | admin | 会場の一覧 |
+| POST | `/api/admin/venues` | admin | 会場の登録 |
+| GET | `/api/admin/booths` | admin | ブースの一覧（ADMIN-03） |
+| POST | `/api/admin/booths` | admin | ブースの登録（ADMIN-03） |
+| GET | `/api/admin/booths/{booth}` | admin | ブースの詳細（ADMIN-03） |
+| PUT | `/api/admin/booths/{booth}` | admin | ブースの更新（ADMIN-03） |
+| DELETE | `/api/admin/booths/{booth}` | admin | ブースの削除（ADMIN-03） |
+| GET | `/api/admin/games/{game}/booths` | admin | 試合へのブースの割り当て状況（ADMIN-04） |
+| PUT | `/api/admin/games/{game}/booths` | admin | 試合へのブースの割り当て（ADMIN-04） |
 
 ---
 
@@ -1527,6 +1542,1074 @@ staff は担当ブースだけ、admin は全ブース。各ブースに、今�
 ```json
 {
     "message": "このブースの担当ではありません"
+}
+```
+
+
+---
+
+## GET `/api/admin/games`
+
+**試合の一覧（ADMIN-01）**
+
+- 実装: `App\Http\Controllers\AdminGameController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+今日以降の試合を開始が早い順で先に、過去の試合をその後ろに新しい順で並べる。最大 200 件。`booths_count` は割り当て済みのブースの数。
+
+**レスポンス**
+
+- `200` 試合の一覧
+
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "season": "2026-27",
+            "section": 5,
+            "home_team": "ベイサイド・ダイナモ",
+            "away_team": "シティ・ラインズ",
+            "venue": {
+                "id": 1,
+                "name": "みなと第一アリーナ"
+            },
+            "tipoff_at": "2026-10-16T19:05:00+09:00",
+            "status": "live",
+            "booths_count": 6
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+
+---
+
+## POST `/api/admin/games`
+
+**試合の登録（ADMIN-01）**
+
+- 実装: `App\Http\Controllers\AdminGameController@store`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+`status` を省略すると `scheduled`。同じ試合（シーズン・節・ホーム・アウェイが同じ）は 422。節が空（NULL）の試合は DB の一意制約では防げないので、アプリ側で確認している。`tipoff_at` にタイムゾーンが無ければアプリのタイムゾーン（Asia/Tokyo）とみなす。
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `season` | `required` `string` `max:20` |
+| `section` | `nullable` `integer` `min:1` `max:999` |
+| `home_team` | `required` `string` `max:255` |
+| `away_team` | `required` `string` `max:255` `different:home_team` |
+| `venue_id` | `required` `integer` `exists:venues,id` |
+| `tipoff_at` | `required` `date` |
+| `status` | `sometimes` `string` `in:"scheduled","live","finished"` |
+
+**リクエスト例**
+
+```json
+{
+    "season": "2026-27",
+    "section": 5,
+    "home_team": "ベイサイド・ダイナモ",
+    "away_team": "シティ・ラインズ",
+    "venue_id": 1,
+    "tipoff_at": "2026-11-01T19:05:00+09:00",
+    "status": "scheduled"
+}
+```
+
+**レスポンス**
+
+- `201` 登録した
+
+```json
+{
+    "data": {
+        "id": 1,
+        "season": "2026-27",
+        "section": 5,
+        "home_team": "ベイサイド・ダイナモ",
+        "away_team": "シティ・ラインズ",
+        "venue": {
+            "id": 1,
+            "name": "みなと第一アリーナ"
+        },
+        "tipoff_at": "2026-10-16T19:05:00+09:00",
+        "status": "live",
+        "booths_count": 0
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `422` 入力が正しくない / 同じ試合がすでにある
+
+```json
+{
+    "message": "同じ試合（シーズン・節・ホーム・アウェイが同じ）がすでに登録されています"
+}
+```
+
+
+---
+
+## POST `/api/admin/games/import`
+
+**試合の CSV 取り込み（ADMIN-02）**
+
+- 実装: `App\Http\Controllers\AdminGameController@import`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+`multipart/form-data` で `file`（CSV、1MB まで、500 行まで）と `dry_run`（`1` なら保存せずに結果だけ返す）を送る。
+
+- 1 行目は見出し: `season,section,date,tipoff_time,home_team,away_team,venue`（日本語の `シーズン,節,日付,開始時刻,ホーム,アウェイ,会場` も可）
+- 文字コードは UTF-8（BOM あり/なし）と Shift_JIS（Excel の CSV）を自動判定する。日付は `2026-11-01` / `2026/11/1`、時刻は `19:05` / `9:05`
+- **1 行でも誤りがあれば、何も保存しない**（422。`errors.csv` に「N 行目: ...」を全部返す）
+- すでに登録済みの試合（シーズン・節・ホーム・アウェイが同じ）と、ファイル内の重複は `skip`（再取り込みしても重複しない）
+- 会場は名前の完全一致で照合し、無ければ誤りにする（打ち間違いで会場が増えないように）
+- 取り込んだ試合の `status` は `scheduled`。自動同期・スクレイピングはしない。1 ユーザー 10 回/分
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `file` | `required` `file` `max:1024` `extensions:csv,txt` |
+| `dry_run` | `sometimes` `boolean` |
+
+**リクエスト例**
+
+```json
+{
+    "file": "（CSV ファイル）",
+    "dry_run": "1"
+}
+```
+
+**レスポンス**
+
+- `200` 結果（`dry_run` が true なら保存していない）
+
+```json
+{
+    "data": {
+        "dry_run": true,
+        "created_count": 1,
+        "skipped_count": 1,
+        "rows": [
+            {
+                "row": 2,
+                "action": "create",
+                "reason": null,
+                "season": "2026-27",
+                "section": 5,
+                "home_team": "ベイサイド・ダイナモ",
+                "away_team": "シティ・ラインズ",
+                "venue": "みなと第一アリーナ",
+                "tipoff_at": "2026-11-01T19:05:00+09:00"
+            },
+            {
+                "row": 3,
+                "action": "skip",
+                "reason": "すでに登録されています",
+                "season": "2026-27",
+                "section": 6,
+                "home_team": "シティ・ラインズ",
+                "away_team": "ベイサイド・ダイナモ",
+                "venue": "みなと第一アリーナ",
+                "tipoff_at": "2026-11-08T14:05:00+09:00"
+            }
+        ]
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `422` ファイルが正しくない / 誤りのある行がある
+
+```json
+{
+    "message": "3 行目: date（日付） は Y-m-d の形式で入力してください",
+    "errors": {
+        "csv": [
+            "3 行目: date（日付） は Y-m-d の形式で入力してください",
+            "4 行目: 会場「みなと第二」が登録されていません（会場名は完全に一致させてください）"
+        ]
+    }
+}
+```
+
+- `429` レート制限
+
+```json
+{
+    "message": "リクエストが多すぎます。しばらくしてからもう一度お試しください"
+}
+```
+
+
+---
+
+## GET `/api/admin/games/{game}`
+
+**試合の詳細（ADMIN-01）**
+
+- 実装: `App\Http\Controllers\AdminGameController@show`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+**パスパラメータ**: `game`
+
+**レスポンス**
+
+- `200` 試合
+
+```json
+{
+    "data": {
+        "id": 1,
+        "season": "2026-27",
+        "section": 5,
+        "home_team": "ベイサイド・ダイナモ",
+        "away_team": "シティ・ラインズ",
+        "venue": {
+            "id": 1,
+            "name": "みなと第一アリーナ"
+        },
+        "tipoff_at": "2026-10-16T19:05:00+09:00",
+        "status": "live",
+        "booths_count": 6
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+
+---
+
+## PUT `/api/admin/games/{game}`
+
+**試合の更新（ADMIN-01）**
+
+- 実装: `App\Http\Controllers\AdminGameController@update`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+全項目を送り直す。試合の状態（`scheduled` / `live` / `finished`）もここで変える。他の試合と同じ組み合わせにすると 422。
+
+**パスパラメータ**: `game`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `season` | `required` `string` `max:20` |
+| `section` | `nullable` `integer` `min:1` `max:999` |
+| `home_team` | `required` `string` `max:255` |
+| `away_team` | `required` `string` `max:255` `different:home_team` |
+| `venue_id` | `required` `integer` `exists:venues,id` |
+| `tipoff_at` | `required` `date` |
+| `status` | `sometimes` `string` `in:"scheduled","live","finished"` |
+
+**リクエスト例**
+
+```json
+{
+    "season": "2026-27",
+    "section": 5,
+    "home_team": "ベイサイド・ダイナモ",
+    "away_team": "シティ・ラインズ",
+    "venue_id": 1,
+    "tipoff_at": "2026-11-01T19:05:00+09:00",
+    "status": "live"
+}
+```
+
+**レスポンス**
+
+- `200` 更新した
+
+```json
+{
+    "data": {
+        "id": 1,
+        "season": "2026-27",
+        "section": 5,
+        "home_team": "ベイサイド・ダイナモ",
+        "away_team": "シティ・ラインズ",
+        "venue": {
+            "id": 1,
+            "name": "みなと第一アリーナ"
+        },
+        "tipoff_at": "2026-10-16T19:05:00+09:00",
+        "status": "live",
+        "booths_count": 6
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 入力が正しくない / 同じ試合がすでにある
+
+```json
+{
+    "message": "同じ試合（シーズン・節・ホーム・アウェイが同じ）がすでに登録されています"
+}
+```
+
+
+---
+
+## DELETE `/api/admin/games/{game}`
+
+**試合の削除（ADMIN-01）**
+
+- 実装: `App\Http\Controllers\AdminGameController@destroy`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+混雑・在庫の記録がまだ無い試合だけ削除できる（割り当て済みのブースも一緒に消える）。記録がある試合は 422 で、状態を「終了」にしてもらう。
+
+**パスパラメータ**: `game`
+
+**レスポンス**
+
+- `200` 削除した
+
+```json
+{
+    "message": "試合を削除しました"
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 記録がある
+
+```json
+{
+    "message": "混雑・在庫の記録がある試合は削除できません。終了した試合は、状態を「終了」にしてください"
+}
+```
+
+
+---
+
+## GET `/api/admin/venues`
+
+**会場の一覧**
+
+- 実装: `App\Http\Controllers\AdminVenueController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+試合の登録フォームの選択肢。CSV 取り込みの会場名は、ここにある名前と完全一致で照合する。
+
+**レスポンス**
+
+- `200` 会場
+
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "name": "みなと第一アリーナ",
+            "address": "架空市みなと区 1-2-3",
+            "map_note": "飲食ブースは 1F・2F のコンコースにあります。"
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+
+---
+
+## POST `/api/admin/venues`
+
+**会場の登録**
+
+- 実装: `App\Http\Controllers\AdminVenueController@store`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+会場名は重複不可（CSV 取り込みが名前で照合するため）。
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `name` | `required` `string` `max:255` `unique:venues,name,NULL,id` |
+| `address` | `nullable` `string` `max:255` |
+| `map_note` | `nullable` `string` `max:2000` |
+
+**リクエスト例**
+
+```json
+{
+    "name": "みなと第二アリーナ",
+    "address": "架空市みなと区 4-5-6",
+    "map_note": null
+}
+```
+
+**レスポンス**
+
+- `201` 登録した
+
+```json
+{
+    "data": {
+        "id": 2,
+        "name": "みなと第二アリーナ",
+        "address": "架空市みなと区 4-5-6",
+        "map_note": null
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `422` 入力が正しくない / 同じ名前の会場がある
+
+```json
+{
+    "message": "この名前 はすでに使われています",
+    "errors": {
+        "name": [
+            "この名前 はすでに使われています"
+        ]
+    }
+}
+```
+
+
+---
+
+## GET `/api/admin/booths`
+
+**ブースの一覧（ADMIN-03）**
+
+- 実装: `App\Http\Controllers\AdminBoothController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+名前順。`staff_count` は担当スタッフの数、`games_count` は出店している試合の数。
+
+**レスポンス**
+
+- `200` ブース
+
+```json
+{
+    "data": [
+        {
+            "booth_id": 1,
+            "name": "から揚げスタンド",
+            "category": "food",
+            "location_label": "2F コンコース東",
+            "description": "揚げたてのから揚げとドリンク",
+            "staff_count": 2,
+            "games_count": 3
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+
+---
+
+## POST `/api/admin/booths`
+
+**ブースの登録（ADMIN-03）**
+
+- 実装: `App\Http\Controllers\AdminBoothController@store`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `name` | `required` `string` `max:100` |
+| `category` | `required` `string` `in:"food","merch","both"` |
+| `location_label` | `required` `string` `max:100` |
+| `description` | `nullable` `string` `max:2000` |
+
+**リクエスト例**
+
+```json
+{
+    "name": "から揚げスタンド",
+    "category": "food",
+    "location_label": "2F コンコース東",
+    "description": "揚げたてのから揚げとドリンク"
+}
+```
+
+**レスポンス**
+
+- `201` 登録した
+
+```json
+{
+    "data": {
+        "booth_id": 1,
+        "name": "から揚げスタンド",
+        "category": "food",
+        "location_label": "2F コンコース東",
+        "description": "揚げたてのから揚げとドリンク",
+        "staff_count": 0,
+        "games_count": 0
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `422` 入力が正しくない
+
+```json
+{
+    "message": "名前 を入力してください",
+    "errors": {
+        "name": [
+            "名前 を入力してください"
+        ]
+    }
+}
+```
+
+
+---
+
+## GET `/api/admin/booths/{booth}`
+
+**ブースの詳細（ADMIN-03）**
+
+- 実装: `App\Http\Controllers\AdminBoothController@show`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+**パスパラメータ**: `booth`
+
+**レスポンス**
+
+- `200` ブース
+
+```json
+{
+    "data": {
+        "booth_id": 1,
+        "name": "から揚げスタンド",
+        "category": "food",
+        "location_label": "2F コンコース東",
+        "description": null,
+        "staff_count": 2,
+        "games_count": 3
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+
+---
+
+## PUT `/api/admin/booths/{booth}`
+
+**ブースの更新（ADMIN-03）**
+
+- 実装: `App\Http\Controllers\AdminBoothController@update`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+全項目を送り直す。出店しているすべての試合の一覧キャッシュを捨てるので、来場者の画面には次の取得から反映される。
+
+**パスパラメータ**: `booth`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `name` | `required` `string` `max:100` |
+| `category` | `required` `string` `in:"food","merch","both"` |
+| `location_label` | `required` `string` `max:100` |
+| `description` | `nullable` `string` `max:2000` |
+
+**リクエスト例**
+
+```json
+{
+    "name": "から揚げスタンド",
+    "category": "both",
+    "location_label": "2F コンコース東",
+    "description": null
+}
+```
+
+**レスポンス**
+
+- `200` 更新した
+
+```json
+{
+    "data": {
+        "booth_id": 1,
+        "name": "から揚げスタンド",
+        "category": "both",
+        "location_label": "2F コンコース東",
+        "description": null,
+        "staff_count": 2,
+        "games_count": 3
+    }
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 入力が正しくない
+
+```json
+{
+    "message": "選択された カテゴリ は正しくありません",
+    "errors": {
+        "category": [
+            "選択された カテゴリ は正しくありません"
+        ]
+    }
+}
+```
+
+
+---
+
+## DELETE `/api/admin/booths/{booth}`
+
+**ブースの削除（ADMIN-03）**
+
+- 実装: `App\Http\Controllers\AdminBoothController@destroy`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+試合に割り当てていないブースだけ削除できる（メニュー・担当スタッフ・招待コードも一緒に消える）。割り当て済みだと試合ごとの混雑・在庫の履歴も消えてしまうため 422。
+
+**パスパラメータ**: `booth`
+
+**レスポンス**
+
+- `200` 削除した
+
+```json
+{
+    "message": "ブースを削除しました"
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 試合に割り当て済み
+
+```json
+{
+    "message": "試合に割り当て済みのブースは削除できません。先に試合への割り当てを外してください"
+}
+```
+
+
+---
+
+## GET `/api/admin/games/{game}/booths`
+
+**試合へのブースの割り当て状況（ADMIN-04）**
+
+- 実装: `App\Http\Controllers\AdminGameBoothController@index`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+全ブースについて、この試合に割り当て済みか（`assigned`）、営業中か（`is_open`）、混雑・在庫の記録があって外せないか（`has_records`）を返す。
+
+**パスパラメータ**: `game`
+
+**レスポンス**
+
+- `200` 全ブース
+
+```json
+{
+    "data": [
+        {
+            "booth_id": 1,
+            "name": "から揚げスタンド",
+            "category": "food",
+            "location_label": "2F コンコース東",
+            "assigned": true,
+            "is_open": true,
+            "has_records": true
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+
+---
+
+## PUT `/api/admin/games/{game}/booths`
+
+**試合へのブースの割り当て（ADMIN-04）**
+
+- 実装: `App\Http\Controllers\AdminGameBoothController@update`
+- 認証: 必要（Bearer トークン）
+- 権限: admin
+
+この試合に出店するブースを、送った内容にそろえる（追加・営業中/閉店中の更新・外す）。`is_open` を省略すると営業中。閉店中にすると、来場者の一覧で最後に並ぶ。
+
+混雑・在庫の記録があるブースは外せない（記録が消えてしまうため。422）。外したいときは `is_open: false`（閉店）にする。一覧のキャッシュを捨てるので、来場者の画面には次の取得から反映される（リアルタイム配信はしない）。
+
+**パスパラメータ**: `game`
+
+**リクエストのバリデーション**（FormRequest から自動取得）
+
+| フィールド | ルール |
+|---|---|
+| `booths` | `present` `array` `max:200` |
+| `booths.*.booth_id` | `required` `integer` `distinct` `exists:booths,id` |
+| `booths.*.is_open` | `sometimes` `boolean` |
+
+**リクエスト例**
+
+```json
+{
+    "booths": [
+        {
+            "booth_id": 1,
+            "is_open": true
+        },
+        {
+            "booth_id": 2,
+            "is_open": false
+        }
+    ]
+}
+```
+
+**レスポンス**
+
+- `200` 更新後の全ブース
+
+```json
+{
+    "data": [
+        {
+            "booth_id": 1,
+            "name": "から揚げスタンド",
+            "category": "food",
+            "location_label": "2F コンコース東",
+            "assigned": true,
+            "is_open": true,
+            "has_records": true
+        }
+    ]
+}
+```
+
+- `401` 未ログイン / トークンが無効
+
+```json
+{
+    "message": "ログインが必要です"
+}
+```
+
+- `403` 役割が足りない / 担当ブースではない
+
+```json
+{
+    "message": "この操作は許可されていません"
+}
+```
+
+- `404` 対象が存在しない
+
+```json
+{
+    "message": "見つかりません"
+}
+```
+
+- `422` 入力が正しくない / 記録があるブースは外せない
+
+```json
+{
+    "message": "「から揚げスタンド」は混雑・在庫の記録があるため、試合から外せません。営業中をオフ（閉店）にしてください"
 }
 ```
 

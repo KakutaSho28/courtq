@@ -178,3 +178,67 @@ export type StockUpdatedEvent = {
   quantity: number | null;
   updated_at: string;
 };
+
+// ===== 管理者（role が admin の人だけが使える。サーバー側でも検査している） =====
+
+/** 管理画面の試合（Game に、割り当て済みのブースの数を足したもの） */
+export type AdminGame = Game & { booths_count: number };
+
+/** 試合の登録・更新で送る内容（全項目を送り直す） */
+export type GameInput = {
+  season: string;
+  section: number | null;
+  home_team: string;
+  away_team: string;
+  venue_id: number;
+  /** ISO 8601（例: 2026-11-01T19:05:00+09:00） */
+  tipoff_at: string;
+  status: GameStatus;
+};
+
+export type Venue = { id: number; name: string; address: string | null; map_note: string | null };
+
+/** 管理画面のブース（ADMIN-03） */
+export type AdminBooth = {
+  booth_id: number;
+  name: string;
+  category: BoothCategory;
+  location_label: string;
+  description: string | null;
+  staff_count: number;
+  games_count: number;
+};
+
+export type BoothInput = { name: string; category: BoothCategory; location_label: string; description: string | null };
+
+/** 試合へのブースの割り当て状況（ADMIN-04）。全ブースについて返る */
+export type GameBoothAssignment = {
+  booth_id: number;
+  name: string;
+  category: BoothCategory;
+  location_label: string;
+  assigned: boolean;
+  is_open: boolean;
+  /** 混雑・在庫の記録があり、試合から外せない */
+  has_records: boolean;
+};
+
+/** CSV 取り込みの結果（ADMIN-02）。action は create（登録する）/ skip（登録済みなどで取り込まない） */
+export type CsvImportRow = {
+  row: number;
+  action: 'create' | 'skip';
+  reason: string | null;
+  season: string;
+  section: number | null;
+  home_team: string;
+  away_team: string;
+  venue: string;
+  tipoff_at: string;
+};
+export type CsvImportResult = { dry_run: boolean; created_count: number; skipped_count: number; rows: CsvImportRow[] };
+
+/** 担当スタッフ（ADMIN-06） */
+export type BoothStaffMember = { user_id: number; name: string; email: string; role: UserRole };
+
+/** 発行した招待コード（ADMIN-05） */
+export type IssuedInvitation = { code: string; booth: { booth_id: number; name: string }; expires_at: string };

@@ -167,6 +167,10 @@ body {
   text-decoration: none;
   font-weight: 700;
   border-bottom: 3px solid transparent;
+  /* 管理者は 4 つ並ぶ。狭い画面でも文字が折り返さないよう、余白と文字を少し小さくする */
+  white-space: nowrap;
+  padding: 0 4px;
+  font-size: clamp(12px, 3.4vw, 16px);
 }
 .tab.is-active { color: #fff; border-bottom-color: var(--accent); }
 
@@ -487,3 +491,27 @@ a.btn { text-decoration: none; }
   .app-header { padding: 10px 16px; }
   .auth-card { margin-top: 4vh; padding: 28px 20px; }
 }
+
+/* ===== 管理画面（S11〜S14） ===== */
+.admin-nav { display: flex; gap: 8px; margin: 0 0 16px; }
+.admin-nav-link { text-decoration: none; flex: 1; text-align: center; padding: 10px 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; color: var(--text-dim); font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.admin-nav-link.is-active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.venue-add { margin: 0 0 16px; }
+.venue-add summary { cursor: pointer; color: var(--text-dim); font-size: 14px; padding: 8px 0; min-height: 44px; display: flex; align-items: center; }
+.csv-import { display: grid; gap: 12px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); }
+.csv-import summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.csv-sample { margin: 0; padding: 10px 12px; background: #eef0f4; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.6; }
+.csv-errors { align-items: flex-start; }
+.csv-errors-title { margin: 0 0 6px; font-weight: 700; }
+.csv-errors ul { margin: 0; padding-left: 20px; }
+.csv-rows { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.csv-rows li { padding: 8px 10px; background: #f6f7fa; border-radius: 8px; overflow-wrap: anywhere; }
+.csv-rows li.is-skip { color: var(--text-dim); }
+.notice-success { background: #e3f4e8; color: #14532d; }
+.assign-row { gap: 6px; }
+.assign-check, .assign-open { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.assign-check input, .assign-open input { width: 22px; height: 22px; flex: none; }
+.assign-open { padding-left: 32px; font-size: 14px; }
+.assign-actions { position: sticky; bottom: 0; padding: 12px 0; margin-top: 12px; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.invite-code { margin: 4px 0; font-size: 34px; font-weight: 700; letter-spacing: 0.12em; text-align: center; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.invite-issued { margin-top: 12px; text-align: center; }

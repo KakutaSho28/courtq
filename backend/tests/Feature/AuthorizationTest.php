@@ -14,6 +14,7 @@ use App\Models\StockLog;
 use App\Models\User;
 use App\Services\ApiDocsGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
@@ -40,6 +41,9 @@ class AuthorizationTest extends TestCase
 
     private MenuItem $itemB;
 
+    /** どの試合にも割り当てていないブース（削除できる） */
+    private Booth $spareBooth;
+
     /** @var array<string, User> */
     private array $users = [];
 
@@ -59,6 +63,21 @@ class AuthorizationTest extends TestCase
         'POST /api/admin/booths/{booth}/invitations' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 201],
         'GET /api/admin/booths/{booth}/staff' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
         'DELETE /api/admin/booths/{booth}/staff/{user}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'GET /api/admin/games' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'POST /api/admin/games' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 201],
+        'POST /api/admin/games/import' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'GET /api/admin/games/{game}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'PUT /api/admin/games/{game}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'DELETE /api/admin/games/{game}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'GET /api/admin/venues' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'POST /api/admin/venues' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 201],
+        'GET /api/admin/booths' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'POST /api/admin/booths' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 201],
+        'GET /api/admin/booths/{booth}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'PUT /api/admin/booths/{booth}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'DELETE /api/admin/booths/{booth}' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'GET /api/admin/games/{game}/booths' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
+        'PUT /api/admin/games/{game}/booths' => ['guest' => 401, 'user' => 403, 'staff_none' => 403, 'staff_own' => 403, 'staff_other' => 403, 'admin' => 200],
     ];
 
     /**
@@ -83,6 +102,7 @@ class AuthorizationTest extends TestCase
         GameBooth::factory()->for($this->game)->for($this->boothA)->create();
         GameBooth::factory()->for($this->game)->for($this->boothB)->create();
         $this->itemA = MenuItem::factory()->create(['booth_id' => $this->boothA->id, 'name' => 'A のメニュー']);
+        $this->spareBooth = Booth::factory()->create(['name' => '予備ブース']);
         $this->itemB = MenuItem::factory()->create(['booth_id' => $this->boothB->id, 'name' => 'B のメニュー']);
 
         $this->users = [
@@ -128,7 +148,31 @@ class AuthorizationTest extends TestCase
             'POST /api/admin/booths/{booth}/invitations' => ['POST', "/api/admin/booths/{$booth->id}/invitations", []],
             'GET /api/admin/booths/{booth}/staff' => ['GET', "/api/admin/booths/{$booth->id}/staff", []],
             'DELETE /api/admin/booths/{booth}/staff/{user}' => ['DELETE', "/api/admin/booths/{$booth->id}/staff/{$member->id}", []],
+            'GET /api/admin/games' => ['GET', '/api/admin/games', []],
+            'POST /api/admin/games' => ['POST', '/api/admin/games', $this->gameBody(['home_team' => '新しいホーム'])],
+            'POST /api/admin/games/import' => ['POST', '/api/admin/games/import', ['file' => UploadedFile::fake()->createWithContent('games.csv', "season,section,date,tipoff_time,home_team,away_team,venue\n2026-27,9,2026-12-01,19:05,取込ホーム,取込アウェイ,{$this->game->venue->name}\n"), 'dry_run' => '0']],
+            'GET /api/admin/games/{game}' => ['GET', "/api/admin/games/{$g}", []],
+            'PUT /api/admin/games/{game}' => ['PUT', "/api/admin/games/{$g}", $this->gameBody(['home_team' => '更新後ホーム'])],
+            'DELETE /api/admin/games/{game}' => ['DELETE', "/api/admin/games/{$g}", []],
+            'GET /api/admin/venues' => ['GET', '/api/admin/venues', []],
+            'POST /api/admin/venues' => ['POST', '/api/admin/venues', ['name' => '新しい会場']],
+            'GET /api/admin/booths' => ['GET', '/api/admin/booths', []],
+            'POST /api/admin/booths' => ['POST', '/api/admin/booths', ['name' => '新ブース', 'category' => 'food', 'location_label' => '1F']],
+            'GET /api/admin/booths/{booth}' => ['GET', "/api/admin/booths/{$booth->id}", []],
+            'PUT /api/admin/booths/{booth}' => ['PUT', "/api/admin/booths/{$booth->id}", ['name' => '改名', 'category' => 'merch', 'location_label' => '3F']],
+            'DELETE /api/admin/booths/{booth}' => ['DELETE', "/api/admin/booths/{$this->spareBooth->id}", []],
+            'GET /api/admin/games/{game}/booths' => ['GET', "/api/admin/games/{$g}/booths", []],
+            'PUT /api/admin/games/{game}/booths' => ['PUT', "/api/admin/games/{$g}/booths", ['booths' => [['booth_id' => $this->boothA->id, 'is_open' => false], ['booth_id' => $this->boothB->id]]]],
         };
+    }
+
+    /** @return array<string, mixed> */
+    private function gameBody(array $override = []): array
+    {
+        return array_merge([
+            'season' => '2026-27', 'section' => 33, 'home_team' => 'ホーム', 'away_team' => 'アウェイ',
+            'venue_id' => $this->game->venue_id, 'tipoff_at' => '2026-12-01T19:05:00+09:00', 'status' => 'scheduled',
+        ], $override);
     }
 
     /** @return array<string, array{0: string, 1: string, 2: int}> */
@@ -151,6 +195,9 @@ class AuthorizationTest extends TestCase
     {
         return [
             'game_booths' => DB::table('game_booths')->orderBy('id')->get()->toArray(),
+            'games' => DB::table('games')->orderBy('id')->get()->toArray(),
+            'booths' => DB::table('booths')->orderBy('id')->get()->toArray(),
+            'venues' => DB::table('venues')->orderBy('id')->get()->toArray(),
             'congestion_logs' => CongestionLog::count(),
             'item_stocks' => ItemStock::count(),
             'stock_logs' => StockLog::count(),
@@ -175,7 +222,11 @@ class AuthorizationTest extends TestCase
         }
         $before = $this->snapshot();
 
-        $response = $this->json($method, $url, $body);
+        // ファイルを送る API は multipart で送る
+        $files = array_filter($body, fn ($v) => $v instanceof UploadedFile);
+        $response = $files === []
+            ? $this->json($method, $url, $body)
+            : $this->call($method, $url, array_diff_key($body, $files), [], $files, ['HTTP_ACCEPT' => 'application/json']);
 
         $response->assertStatus($expected);
         if ($expected === 403) {
@@ -220,6 +271,12 @@ class AuthorizationTest extends TestCase
         $this->postJson('/api/admin/booths/999999/invitations')->assertForbidden();
         $this->getJson('/api/admin/booths/999999/staff')->assertForbidden();
         $this->deleteJson('/api/admin/booths/999999/staff/999999')->assertForbidden();
+        $this->getJson('/api/admin/games/999999')->assertForbidden();
+        $this->putJson('/api/admin/games/999999', [])->assertForbidden();
+        $this->deleteJson('/api/admin/games/999999')->assertForbidden();
+        $this->putJson('/api/admin/games/999999/booths', [])->assertForbidden();
+        $this->putJson('/api/admin/booths/999999', [])->assertForbidden();
+        $this->deleteJson('/api/admin/booths/999999')->assertForbidden();
     }
 
     /** 他のブースへの不正な入力は、入力検証（422）より先に 403 になる */
