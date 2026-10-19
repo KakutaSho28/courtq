@@ -1,21 +1,30 @@
 import { apiClient } from './client';
 import type {
+  AdminBooth,
+  AdminGame,
   ApiResponse,
   ApiResponseWithMeta,
   AuthUser,
   BoothDetail,
+  BoothInput,
+  BoothStaffMember,
   BoothListItem,
   CongestionLevel,
   CongestionPoint,
   CongestionUpdateResult,
+  CsvImportResult,
   FavoriteBooth,
   Game,
+  GameBoothAssignment,
+  GameInput,
   InvitationAccepted,
+  IssuedInvitation,
   MenuItemInput,
   StaffBooth,
   StaffMenuItem,
   StockStatus,
   StockUpdateResult,
+  Venue,
 } from '../types';
 
 /** 画面から API を呼ぶ関数。URL とレスポンスの型はここに集める（docs/api-endpoints.md と同じ） */
@@ -117,4 +126,84 @@ export async function deleteMenuItem(boothId: number | string, itemId: number): 
 /** STAFF-05 招待コードを使う（ログインしていれば誰でも） */
 export async function acceptInvitation(code: string): Promise<InvitationAccepted> {
   return (await apiClient.post<ApiResponse<InvitationAccepted>>('/staff/invitations/accept', { code })).data.data;
+}
+
+// ===== 管理者（role が admin の人だけが使える） =====
+
+/** ADMIN-01 試合の一覧（今日以降が先） */
+export async function fetchAdminGames(): Promise<AdminGame[]> {
+  return (await apiClient.get<ApiResponse<AdminGame[]>>('/admin/games')).data.data;
+}
+
+export async function createGame(input: GameInput): Promise<AdminGame> {
+  return (await apiClient.post<ApiResponse<AdminGame>>('/admin/games', input)).data.data;
+}
+
+export async function updateGame(gameId: number, input: GameInput): Promise<AdminGame> {
+  return (await apiClient.put<ApiResponse<AdminGame>>(`/admin/games/${gameId}`, input)).data.data;
+}
+
+export async function deleteGame(gameId: number): Promise<void> {
+  await apiClient.delete(`/admin/games/${gameId}`);
+}
+
+/** ADMIN-02 CSV の取り込み。dryRun なら保存せずに結果だけ返す */
+export async function importGamesCsv(file: File, dryRun: boolean): Promise<CsvImportResult> {
+  const body = new FormData();
+  body.append('file', file);
+  body.append('dry_run', dryRun ? '1' : '0');
+  // apiClient の既定は application/json で、そのままだと axios が FormData を JSON に変換してしまう（ファイルが空の {} になる）。
+  // multipart と指定すれば FormData のまま送られ、実際の Content-Type（境界つき）はブラウザが付ける
+  return (await apiClient.post<ApiResponse<CsvImportResult>>('/admin/games/import', body, { headers: { 'Content-Type': 'multipart/form-data' } })).data.data;
+}
+
+export async function fetchVenues(): Promise<Venue[]> {
+  return (await apiClient.get<ApiResponse<Venue[]>>('/admin/venues')).data.data;
+}
+
+export async function createVenue(name: string): Promise<Venue> {
+  return (await apiClient.post<ApiResponse<Venue>>('/admin/venues', { name })).data.data;
+}
+
+/** ADMIN-03 ブースの管理 */
+export async function fetchAdminBooths(): Promise<AdminBooth[]> {
+  return (await apiClient.get<ApiResponse<AdminBooth[]>>('/admin/booths')).data.data;
+}
+
+export async function fetchAdminBooth(boothId: number | string): Promise<AdminBooth> {
+  return (await apiClient.get<ApiResponse<AdminBooth>>(`/admin/booths/${encodeURIComponent(String(boothId))}`)).data.data;
+}
+
+export async function createBooth(input: BoothInput): Promise<AdminBooth> {
+  return (await apiClient.post<ApiResponse<AdminBooth>>('/admin/booths', input)).data.data;
+}
+
+export async function updateBooth(boothId: number, input: BoothInput): Promise<AdminBooth> {
+  return (await apiClient.put<ApiResponse<AdminBooth>>(`/admin/booths/${boothId}`, input)).data.data;
+}
+
+export async function deleteBooth(boothId: number): Promise<void> {
+  await apiClient.delete(`/admin/booths/${boothId}`);
+}
+
+/** ADMIN-04 試合へのブースの割り当て */
+export async function fetchGameBooths(gameId: number | string): Promise<GameBoothAssignment[]> {
+  return (await apiClient.get<ApiResponse<GameBoothAssignment[]>>(`/admin/games/${encodeURIComponent(String(gameId))}/booths`)).data.data;
+}
+
+export async function syncGameBooths(gameId: number | string, booths: { booth_id: number; is_open: boolean }[]): Promise<GameBoothAssignment[]> {
+  return (await apiClient.put<ApiResponse<GameBoothAssignment[]>>(`/admin/games/${encodeURIComponent(String(gameId))}/booths`, { booths })).data.data;
+}
+
+/** ADMIN-05 / 06 招待コードの発行と、担当スタッフの一覧・解除 */
+export async function issueInvitation(boothId: number | string): Promise<IssuedInvitation> {
+  return (await apiClient.post<ApiResponse<IssuedInvitation>>(`/admin/booths/${encodeURIComponent(String(boothId))}/invitations`)).data.data;
+}
+
+export async function fetchBoothStaff(boothId: number | string): Promise<BoothStaffMember[]> {
+  return (await apiClient.get<ApiResponse<BoothStaffMember[]>>(`/admin/booths/${encodeURIComponent(String(boothId))}/staff`)).data.data;
+}
+
+export async function removeBoothStaff(boothId: number | string, userId: number): Promise<void> {
+  await apiClient.delete(`/admin/booths/${encodeURIComponent(String(boothId))}/staff/${userId}`);
 }

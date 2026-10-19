@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { fetchMe } from '../api/courtq';
 import { getEcho } from '../lib/echo';
-import { canUseStaffScreens } from '../lib/role';
+import { canUseAdminScreens, canUseStaffScreens } from '../lib/role';
 import { useAuthStore } from '../store/auth';
 import { InstallButton } from './InstallButton';
 import { Logo } from './Logo';
@@ -14,11 +14,13 @@ export function Layout() {
   const { pathname } = useLocation();
   const onFavorites = pathname.startsWith('/favorites');
   const onStaff = pathname.startsWith('/staff') || pathname.startsWith('/invite');
+  const onAdmin = pathname.startsWith('/admin');
   const token = useAuthStore((s) => s.token);
   const clear = useAuthStore((s) => s.clear);
   const setUser = useAuthStore((s) => s.setUser);
   const user = useAuthStore((s) => s.user);
   const isStaff = canUseStaffScreens(user);
+  const isAdmin = canUseAdminScreens(user);
 
   // スタッフだった人の役割が、使っている途中でなくなったら（担当を外された）、画面から外れたことを知らせる
   const wasStaff = useRef(isStaff);
@@ -68,7 +70,7 @@ export function Layout() {
         </div>
       </header>
       <nav className="tab-nav" aria-label="メイン">
-        <Link to="/" className={`tab${onFavorites || onStaff ? '' : ' is-active'}`} aria-current={onFavorites || onStaff ? undefined : 'page'}>
+        <Link to="/" className={`tab${onFavorites || onStaff || onAdmin ? '' : ' is-active'}`} aria-current={onFavorites || onStaff || onAdmin ? undefined : 'page'}>
           試合・ブース
         </Link>
         <Link to="/favorites" className={`tab${onFavorites ? ' is-active' : ''}`} aria-current={onFavorites ? 'page' : undefined}>
@@ -78,6 +80,11 @@ export function Layout() {
         <Link to={isStaff ? '/staff' : '/invite'} className={`tab${onStaff ? ' is-active' : ''}`} aria-current={onStaff ? 'page' : undefined}>
           {isStaff ? 'スタッフ' : 'スタッフ登録'}
         </Link>
+        {isAdmin && (
+          <Link to="/admin/games" className={`tab${onAdmin ? ' is-active' : ''}`} aria-current={onAdmin ? 'page' : undefined}>
+            管理
+          </Link>
+        )}
       </nav>
       {roleLost && (
         <div className="notice notice-warning role-lost" role="alert">

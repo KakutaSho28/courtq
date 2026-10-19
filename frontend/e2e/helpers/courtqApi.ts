@@ -10,6 +10,8 @@ export const NOW = new Date('2026-10-16T19:30:00+09:00');
 const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString().replace('Z', '+00:00');
 
 export const ALICE = { id: 1, name: 'アリス', email: 'a@example.com', role: 'user', booths: [] as { booth_id: number; name: string }[] };
+/** 管理者 */
+export const ADMIN = { id: 9, name: 'カナ', email: 'kana@example.com', role: 'admin', booths: [] as { booth_id: number; name: string }[] };
 /** ブース 2（フリースロー・カレー）の担当スタッフ */
 export const SAKURA = { id: 2, name: 'サクラ', email: 'sakura@example.com', role: 'staff', booths: [{ booth_id: 2, name: 'フリースロー・カレー' }] };
 /** 有効な招待コード（ブース 5「ウィングス・グッズ東」。表示は K7Q2-MX9P） */
@@ -94,7 +96,7 @@ export const HISTORY = [
 type Options = {
   games?: unknown[];
   /** ログインしているユーザー（既定は来場者のアリス） */
-  user?: typeof ALICE | typeof SAKURA;
+  user?: typeof ALICE | typeof SAKURA | typeof ADMIN;
   /** パス（/api を除く）ごとに応答を差し替える。関数を返すと、その呼び出しの応答になる */
   override?: (path: string, route: Route) => Promise<boolean> | boolean;
 };
@@ -105,7 +107,7 @@ export type Recorded = { method: string; path: string; query: string };
 export async function mockCourtqApi(page: Page, options: Options = {}): Promise<Recorded[]> {
   const calls: Recorded[] = [];
   const favorites = new Set(booths().filter((b) => b.is_favorite).map((b) => b.booth_id));
-  let me: typeof ALICE | typeof SAKURA = options.user ?? ALICE;
+  let me: typeof ALICE | typeof SAKURA | typeof ADMIN = options.user ?? ALICE;
 
   // スタッフの更新が反映される状態（ブース 2 の混雑、メニューの在庫、メニュー一覧）
   const congestionOf: Record<number, ReturnType<typeof congestion>> = {};
