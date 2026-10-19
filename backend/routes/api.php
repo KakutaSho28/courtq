@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Controllers\AdminBoothController;
 use App\Http\Controllers\AdminBoothStaffController;
+use App\Http\Controllers\AdminGameBoothController;
+use App\Http\Controllers\AdminGameController;
+use App\Http\Controllers\AdminVenueController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BoothController;
 use App\Http\Controllers\FavoriteController;
@@ -63,6 +67,29 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('admin')->middleware('role:admin')->group(function () {
+        // ADMIN-01 試合の管理 / ADMIN-02 CSV の取り込み（/games/import は {game} より先に書く）
+        Route::post('/games/import', [AdminGameController::class, 'import'])->middleware('throttle:admin-import');
+        Route::get('/games', [AdminGameController::class, 'index']);
+        Route::post('/games', [AdminGameController::class, 'store']);
+        Route::get('/games/{game}', [AdminGameController::class, 'show']);
+        Route::put('/games/{game}', [AdminGameController::class, 'update']);
+        Route::delete('/games/{game}', [AdminGameController::class, 'destroy']);
+
+        // 会場（試合の登録フォームと CSV の会場名の照合用）
+        Route::get('/venues', [AdminVenueController::class, 'index']);
+        Route::post('/venues', [AdminVenueController::class, 'store']);
+
+        // ADMIN-03 ブースの管理
+        Route::get('/booths', [AdminBoothController::class, 'index']);
+        Route::post('/booths', [AdminBoothController::class, 'store']);
+        Route::get('/booths/{booth}', [AdminBoothController::class, 'show']);
+        Route::put('/booths/{booth}', [AdminBoothController::class, 'update']);
+        Route::delete('/booths/{booth}', [AdminBoothController::class, 'destroy']);
+
+        // ADMIN-04 試合へのブースの割り当て（営業中 / 閉店中の切り替えを含む）
+        Route::get('/games/{game}/booths', [AdminGameBoothController::class, 'index']);
+        Route::put('/games/{game}/booths', [AdminGameBoothController::class, 'update']);
+
         // ADMIN-05 招待コードの発行 / ADMIN-06 担当スタッフの一覧・解除
         Route::post('/booths/{booth}/invitations', [AdminBoothStaffController::class, 'invite']);
         Route::get('/booths/{booth}/staff', [AdminBoothStaffController::class, 'index']);
