@@ -8,6 +8,10 @@ test.use({ baseURL: 'http://localhost:5176' });
 
 const MOCK_API = 'http://localhost:5180';
 
+// モック API は 1 つで、/__down による切断を全テストで共有する。同じファイルのテストを別々のワーカーで並列に動かすと
+// 互いの切断に巻き込まれるため、必ず 1 ワーカーで直列に動かす（--repeat-each を使うときも --workers=1）
+test.describe.configure({ mode: 'serial' });
+
 // 失敗してもモック API を落としたままにしない
 test.afterEach(async ({ request }) => {
   await request.get(`${MOCK_API}/__down?on=0`);
@@ -164,4 +168,91 @@ test('「ホーム画面に追加」ボタンは、インストール可能に�
 
   await expect.poll(() => page.evaluate(() => (window as unknown as { __prompted?: boolean }).__prompted)).toBe(true);
   await expect(button).toHaveCount(0);
+});
+
+/** 試合 → ブース一覧 → ブース詳細を開いて、API のレスポンスをキャッシュさせる */
+async function visitBoothScreens(page: Page) {
+  await loginAsAlice(page);
+  await page.goto('/');
+  await waitForServiceWorker(page);
+  await page.goto('/games/1');
+  await expect(page.getByRole('heading', { level: 1, name: /北浜ウィングス/ })).toBeVisible();
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
+  await page.goto('/games/1/booths/2');
+  await expect(page.getByRole('heading', { level: 1, name: 'フリースロー・カレー' })).toBeVisible();
+  await expect(page.getByText('ビーフカレー')).toBeVisible();
+  await expect
+    .poll(async () => {
+      const urls = (await cachedUrls(page))['courtq-api'] ?? [];
+      return ['/api/games/1', '/api/games/1/booths?', '/api/games/1/booths/2', '/congestion-history'].every((p) => urls.some((u) => u.includes(p)));
+    })
+    .toBe(true);
+}
+
+test('オフラインでも、前に開いたブース一覧と詳細が表示される（バナーあり・混雑の文言つき）', async ({ page, context, request }) => {
+  await visitBoothScreens(page);
+
+  await request.get(`${MOCK_API}/__down?on=1`);
+  await context.setOffline(true);
+
+  // ブース一覧（デフォルトの並び順で開いたもの）
+  await page.goto('/games/1');
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
+  await expect(page.getByText('空いている').first()).toBeVisible();
+  await expect(page.getByText('混雑', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'オフラインです' })).toBeVisible();
+
+  // ブース詳細（メニューの在庫も）
+  await page.goto('/games/1/booths/2');
+  await expect(page.getByRole('heading', { level: 1, name: 'フリースロー・カレー' })).toBeVisible();
+  await expect(page.getByText('ビーフカレー')).toBeVisible();
+  await expect(page.getByText('売り切れ').first()).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'オフラインです' })).toBeVisible();
+});
+
+test('オフラインで時間がたつと、キャッシュ表示でも「情報が古い可能性があります」が出る', async ({ page, context, request }) => {
+  await visitBoothScreens(page);
+  await page.goto('/games/1');
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
+  await expect(page.getByText('情報が古い可能性があります')).toHaveCount(0);
+
+  await request.get(`${MOCK_API}/__down?on=1`);
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
+
+  // 画面を開いたまま 20 分たったことにする（しきい値は 15 分。表示は画面側で計算し直される）
+  await page.clock.install({ time: new Date(Date.now()) });
+  await page.reload();
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
+  await expect(page.getByText('情報が古い可能性があります')).toHaveCount(0);
+  await page.clock.fastForward('20:00');
+  await expect(page.getByText('情報が古い可能性があります').first()).toBeVisible();
+});
+
+test('オフラインで、まだ開いたことのない絞り込み・ブースは、オフラインの案内を出す（真っ白にならない）', async ({ page, context, request }) => {
+  await visitBoothScreens(page);
+
+  await request.get(`${MOCK_API}/__down?on=1`);
+  await context.setOffline(true);
+
+  await page.goto('/games/1/booths/1');
+  await expect(page.getByText('オフラインのため')).toBeVisible();
+  await expect(page.getByRole('button', { name: '再読み込み' })).toBeVisible();
+});
+
+test('接続が戻ると、ブース一覧が自動で取り直される', async ({ page, context, request }) => {
+  await visitBoothScreens(page);
+  await page.goto('/games/1');
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
+
+  await request.get(`${MOCK_API}/__down?on=1`);
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole('alert').filter({ hasText: 'オフラインです' })).toBeVisible();
+
+  await request.get(`${MOCK_API}/__down?on=0`);
+  await context.setOffline(false);
+  await expect(page.getByRole('alert').filter({ hasText: 'オフラインです' })).toHaveCount(0);
+  await expect(page.getByText('ダンク・ポップコーン')).toBeVisible();
 });

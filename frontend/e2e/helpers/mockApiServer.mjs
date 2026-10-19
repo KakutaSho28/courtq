@@ -56,6 +56,34 @@ createServer((req, res) => {
   if (url.pathname === '/api/health') return json({ data: { status: 'ok', database: 'ok' } });
   if (url.pathname === '/api/me') return json({ data: me });
   if (url.pathname === '/api/games') return json({ data: [todayGame()] });
+  // ブース（S04 / S05 のオフライン表示の検証用）。更新時刻は「いまから N 分前」で毎回作る
+  const ago = (m) => new Date(Date.now() - m * 60_000).toISOString().replace('Z', '+00:00');
+  const boothList = [
+    { booth_id: 1, game_booth_id: 11, name: 'ダンク・ポップコーン', category: 'food', location_label: '1F コンコース西', is_open: true, congestion: { level: 1, label: '空いている', wait_minutes: 0, updated_at: ago(2), is_stale: false }, has_stock: true, is_favorite: false },
+    { booth_id: 2, game_booth_id: 12, name: 'フリースロー・カレー', category: 'food', location_label: '2F コンコース東', is_open: true, congestion: { level: 3, label: '混雑', wait_minutes: 15, updated_at: ago(3), is_stale: false }, has_stock: true, is_favorite: true },
+  ];
+  const meta = { stale_after_minutes: 15 };
+  if (url.pathname === '/api/games/1') return json({ data: todayGame() });
+  if (url.pathname === '/api/games/1/booths') return json({ data: boothList, meta });
+  const detail = url.pathname.match(/^\/api\/games\/1\/booths\/(\d+)$/);
+  if (detail) {
+    const booth = boothList.find((b) => String(b.booth_id) === detail[1]);
+    if (!booth) return json({ message: '見つかりません' }, 404);
+    return json({
+      data: {
+        ...booth,
+        description: '架空のデモ用ブースです。',
+        menu_items: [
+          { id: 21, name: 'ビーフカレー', kind: 'food', price: 900, description: null, stock: { status: 'in_stock', label: '在庫あり', quantity: null, updated_at: ago(3), is_stale: false } },
+          { id: 23, name: 'ナン', kind: 'food', price: 300, description: null, stock: { status: 'sold_out', label: '売り切れ', quantity: 0, updated_at: ago(10), is_stale: false } },
+        ],
+      },
+      meta,
+    });
+  }
+  if (/^\/api\/games\/1\/booths\/\d+\/congestion-history$/.test(url.pathname)) {
+    return json({ data: [{ level: 1, label: '空いている', wait_minutes: 0, recorded_at: ago(40) }, { level: 3, label: '混雑', wait_minutes: 15, recorded_at: ago(3) }] });
+  }
   if (url.pathname === '/api/auth/logout') return json({ message: 'ログアウトしました' });
   return json({ message: '見つかりません' }, 404);
 }).listen(PORT, () => console.log(`mock api on :${PORT}`));

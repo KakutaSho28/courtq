@@ -128,7 +128,7 @@ cd frontend && npm run e2e             # Playwright（API はモック。初回�
 
 ## PWA
 
-- `vite-plugin-pwa`（`frontend/vite.config.ts`）。アプリシェルはプリキャッシュ、`GET /api/*` は NetworkFirst（3 秒でタイムアウト、最大 5 分）。キャッシュ名は `courtq-api`。
+- `vite-plugin-pwa`（`frontend/vite.config.ts`）。アプリシェルはプリキャッシュ、`GET /api/*` は NetworkFirst（3 秒でタイムアウト、最大 1 時間。古さは画面側が `updated_at` から計算して表示する）。キャッシュ名は `courtq-api`。
 - API キャッシュはユーザー固有データ（お気に入りなど）を含むため、ログイン/ログアウト時に破棄する（`src/lib/pwa.ts`、`store/auth.ts`）。
 - オフライン UI: `OfflineBanner`、`OfflineFallback`、`useOnlineStatus`。
 - アイコンは `frontend/public/icons`（再生成: `cd frontend && node scripts/generate-icons.mjs`。元は `public/favicon.svg` と `public/icons/icon-maskable.svg`）。
